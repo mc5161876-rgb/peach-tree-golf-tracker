@@ -1,3 +1,33 @@
+/**
+ * Single source of truth for the club's identity.
+ *
+ * The app is branded to the course, not to a product name. If the club renames
+ * (a move to "Yuba Golf Club" has been discussed), edit this block and nothing
+ * else: the header, page title, social metadata, and PWA manifest all read from
+ * here.
+ */
+export const CLUB_IDENTITY = {
+  /** Short name used as the header wordmark. */
+  wordmark: "Peach Tree",
+  /** Full legal-ish name used in titles, metadata, and round history. */
+  fullName: "Peach Tree Golf & Country Club",
+  /** Second line under the wordmark in the app header. */
+  headerSubtitle: "Golf & Country Club · Marysville",
+  /** Town and state, used in descriptive copy. */
+  location: "Marysville, California",
+  /** Town on its own, for tighter labels like "Home course · Marysville". */
+  locality: "Marysville",
+  /** Crest letters shown in the header mark and course banner. */
+  crest: "PT",
+  /** What the app does. Used in metadata, never as a brand name in the UI. */
+  tagline: "Personal golf scoring",
+  /** Home-screen name once installed. Keep short — iOS truncates past ~12 chars. */
+  shortName: "Peach Tree",
+} as const;
+
+export const CLUB_PAGE_TITLE = `${CLUB_IDENTITY.fullName} — ${CLUB_IDENTITY.tagline}`;
+export const CLUB_DESCRIPTION = `Personal golf scoring and illustrated hole guides for ${CLUB_IDENTITY.fullName} in ${CLUB_IDENTITY.location}.`;
+
 export type Tee = "black" | "blue" | "white" | "combo" | "green";
 
 export const TEE_OPTIONS: { value: Tee; label: string; shortLabel: string; total: number }[] = [
@@ -50,11 +80,11 @@ const hole = (
 
 export const HOME_COURSE = {
   id: "peach-tree",
-  name: "Peach Tree Golf & Country Club",
-  shortName: "Peach Tree",
-  location: "Marysville, California",
+  name: CLUB_IDENTITY.fullName,
+  shortName: CLUB_IDENTITY.wordmark,
+  location: CLUB_IDENTITY.location,
   address: "2043 Simpson Dantoni Road",
-  monogram: "PT",
+  monogram: CLUB_IDENTITY.crest,
   par: 72,
   aerial: "/course/peach-tree/course-aerial.webp",
   guideLabel: "Illustrated course guide · not GPS",

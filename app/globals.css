@@ -1845,58 +1845,6 @@ p {
   font-weight: 700;
 }
 
-.concepts-link {
-  padding: 14px 0;
-}
-
-.concepts-link > button {
-  display: grid;
-  width: 100%;
-  min-height: 76px;
-  grid-template-columns: 76px 1fr auto;
-  align-items: center;
-  gap: 12px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-}
-
-.mini-concepts {
-  display: flex;
-}
-
-.mini-concepts i {
-  display: grid;
-  width: 33px;
-  height: 42px;
-  margin-right: -8px;
-  place-items: center;
-  border: 2px solid var(--bg);
-  border-radius: 10px;
-  color: var(--on-brand);
-  background: var(--brand);
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.concepts-link b,
-.concepts-link small {
-  display: block;
-}
-
-.concepts-link b {
-  font-size: 14px;
-}
-
-.concepts-link small {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
 .danger-zone > div:first-child b {
   font-size: 14px;
 }
@@ -1935,69 +1883,6 @@ p {
 .confirm-row button.danger {
   color: #fff;
   background: var(--negative);
-}
-
-/* Concepts */
-
-.concept-grid {
-  display: grid;
-  gap: 10px;
-}
-
-.concept-grid article {
-  display: grid;
-  grid-template-columns: 66px 1fr;
-  align-items: center;
-  gap: 16px;
-  min-height: 91px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 17px;
-  background: var(--surface);
-}
-
-.concept-mark {
-  position: relative;
-  display: grid;
-  width: 64px;
-  height: 64px;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 18px;
-  color: var(--on-brand);
-  background: var(--brand);
-  font-size: 17px;
-  font-weight: 850;
-}
-
-.concept-mark i {
-  position: absolute;
-  display: block;
-  border-radius: 999px;
-  background: var(--accent);
-}
-
-.concept-1 i { right: -9px; bottom: 7px; width: 44px; height: 6px; transform: rotate(-24deg); }
-.concept-2 { border-radius: 50%; }
-.concept-2 i { right: 10px; top: 8px; width: 4px; height: 48px; }
-.concept-3 i { right: 7px; bottom: 7px; width: 19px; height: 19px; }
-.concept-4 { color: var(--brand); background: var(--accent); }
-.concept-4 i { left: 8px; bottom: 10px; width: 48px; height: 3px; transform: rotate(-10deg); }
-.concept-5 { border-radius: 12px; }
-.concept-5 i { right: 6px; top: 6px; width: 18px; height: 18px; border-radius: 4px; }
-.concept-6 i { right: -8px; bottom: -8px; width: 42px; height: 42px; background: color-mix(in srgb, var(--accent) 75%, transparent); }
-
-.concept-grid h2 {
-  margin: 0 0 4px;
-  font-size: 18px;
-  letter-spacing: -0.03em;
-}
-
-.concept-grid p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.35;
 }
 
 /* Score celebrations */

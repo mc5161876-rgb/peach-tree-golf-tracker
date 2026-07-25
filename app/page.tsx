@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { HOME_COURSE, NEGATIVE_TAGS, POSITIVE_TAGS, TEE_OPTIONS, teeLabel, type Tee } from "./data/mock-course";
+import { CLUB_IDENTITY, HOME_COURSE, NEGATIVE_TAGS, POSITIVE_TAGS, TEE_OPTIONS, teeLabel, type Tee } from "./data/mock-course";
 import { MOCK_ROUNDS, type MockRound } from "./data/mock-history";
 
 type Theme = "club" | "sport" | "clean";
@@ -194,7 +194,6 @@ export default function GolfTracker() {
   const [defaultLength, setDefaultLength] = useState<9 | 18>(18);
   const [savedRounds, setSavedRounds] = useState<MockRound[]>([]);
   const [selectedHistory, setSelectedHistory] = useState<MockRound | null>(null);
-  const [showConcepts, setShowConcepts] = useState(false);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [selectedHoleHistory, setSelectedHoleHistory] = useState<number | null>(null);
   const [savedRoundId, setSavedRoundId] = useState<string | null>(null);
@@ -618,7 +617,7 @@ export default function GolfTracker() {
         <section className="welcome-block">
           <span className="eyebrow">Good afternoon, Mario</span>
           <h1>Your game, one round at a time.</h1>
-          <p>Ready for another loop at Peach Tree?</p>
+          <p>Ready for another loop at {CLUB_IDENTITY.wordmark}?</p>
           <button type="button" className="primary-action" onClick={() => { setNav("play"); setRoundPhase("setup"); setRoundLength(defaultLength); setTee(defaultTee); }}>Start a round <span>→</span></button>
         </section>
 
@@ -677,10 +676,10 @@ export default function GolfTracker() {
     <div className="screen setup-screen">
       <div className="page-heading"><span className="eyebrow">New round</span><h1>Let’s play.</h1><p>Three choices, then straight to the first tee.</p></div>
       <section className="course-banner course-banner-aerial">
-        <Image src={HOME_COURSE.aerial} alt="Aerial overview of Peach Tree Golf & Country Club in Marysville, California" fill sizes="(max-width: 560px) 100vw, 560px" priority unoptimized />
+        <Image src={HOME_COURSE.aerial} alt={`Aerial overview of ${CLUB_IDENTITY.fullName} in ${CLUB_IDENTITY.location}`} fill sizes="(max-width: 560px) 100vw, 560px" priority unoptimized />
         <span className="course-banner-shade" aria-hidden="true" />
         <div className="course-mark" aria-hidden="true"><span>{HOME_COURSE.monogram}</span></div>
-        <div className="course-banner-copy"><span className="eyebrow">Home course · Marysville</span><h2>{HOME_COURSE.name}</h2><p>{HOME_COURSE.address}</p></div>
+        <div className="course-banner-copy"><span className="eyebrow">Home course · {CLUB_IDENTITY.locality}</span><h2>{HOME_COURSE.name}</h2><p>{HOME_COURSE.address}</p></div>
         <span className="course-par">PAR<br /><b>{HOME_COURSE.par}</b></span>
       </section>
       <section className="setup-options">
@@ -792,25 +791,7 @@ export default function GolfTracker() {
     );
   };
 
-  const NameConcepts = () => {
-    const concepts = [
-      ["Roundwell", "RW", "A calm record of every loop"],
-      ["Pinstead", "P·", "Steady, personal, precise"],
-      ["After Nine", "9", "The scorecard that stays simple"],
-      ["Loop & Lie", "L/L", "A modern golfer’s field note"],
-      ["Fairway Ledger", "FL", "Your private record of play"],
-      ["Sunday Card", "SC", "Easy scoring for any day"],
-    ];
-    return (
-      <div className="screen concepts-screen">
-        <button type="button" className="back-link" onClick={() => setShowConcepts(false)}>← Settings</button>
-        <div className="page-heading"><span className="eyebrow">Exploratory · not trademark cleared</span><h1>Name & icon ideas</h1><p>Six distinct directions for a future iPhone Home Screen identity.</p></div>
-        <div className="concept-grid">{concepts.map(([name, mark, line], index) => <article key={name}><div className={`concept-mark concept-${index + 1}`}><span>{mark}</span><i /></div><div><h2>{name}</h2><p>{line}</p></div></article>)}</div>
-      </div>
-    );
-  };
-
-  const SettingsScreen = () => showConcepts ? NameConcepts() : (
+  const SettingsScreen = () => (
     <div className="screen settings-screen">
       <div className="page-heading"><span className="eyebrow">Profile & prototype</span><h1>Settings</h1><p>Personalize defaults without complicating live scoring.</p></div>
       <section className="settings-section">
@@ -823,7 +804,6 @@ export default function GolfTracker() {
         <div className="section-title"><div><span className="eyebrow">Compare options</span><h2>Prototype Lab</h2></div><span className="lab-status">{METHOD_LABELS[scoreMethod]} · {roundLayout === "focus" ? "One hole" : "Grid"}</span></div>
         <LabControls theme={theme} setTheme={setTheme} scoreMethod={scoreMethod} setScoreMethod={setScoreMethod} roundLayout={roundLayout} setRoundLayout={setRoundLayout} tagBehavior={tagBehavior} setTagBehavior={setTagBehavior} />
       </section>
-      <section className="settings-section concepts-link"><button type="button" onClick={() => setShowConcepts(true)}><span className="mini-concepts" aria-hidden="true"><i>R</i><i>9</i><i>F</i></span><span><b>Name & icon concepts</b><small>Explore six possible identities</small></span><strong>›</strong></button></section>
       <section className="settings-section danger-zone"><div><b>Reset prototype data</b><p>Clear saved rounds, the active round, profile values, and Lab choices on this device.</p></div>{resetConfirm ? <div className="confirm-row"><button type="button" onClick={() => setResetConfirm(false)}>Cancel</button><button type="button" className="danger" onClick={resetPrototype}>Yes, reset everything</button></div> : <button type="button" onClick={() => setResetConfirm(true)}>Clear / reset mock data</button>}</section>
     </div>
   );
@@ -835,7 +815,7 @@ export default function GolfTracker() {
       <div className="app-frame">
         {showStandardChrome && (
           <header className="app-header">
-            <button type="button" className="brand" onClick={() => { setNav("home"); setSelectedHistory(null); }} aria-label="Roundwell home"><span className="brand-mark">R<i /></span><span><b>Roundwell</b><small>Personal golf scoring</small></span></button>
+            <button type="button" className="brand" onClick={() => { setNav("home"); setSelectedHistory(null); }} aria-label={`${CLUB_IDENTITY.wordmark} home`}><span className="brand-mark">{CLUB_IDENTITY.crest}<i /></span><span><b>{CLUB_IDENTITY.wordmark}</b><small>{CLUB_IDENTITY.headerSubtitle}</small></span></button>
             <button type="button" className="lab-pill" onClick={() => setShowLab(true)}>◫ Prototype Lab</button>
           </header>
         )}
@@ -854,7 +834,7 @@ export default function GolfTracker() {
               { id: "play" as NavTab, icon: "●", label: "Play" },
               { id: "history" as NavTab, icon: "≡", label: "History" },
               { id: "settings" as NavTab, icon: "⚙", label: "Settings" },
-            ].map((item) => <button type="button" key={item.id} className={nav === item.id ? "selected" : ""} aria-current={nav === item.id ? "page" : undefined} onClick={() => { setNav(item.id); setSelectedHistory(null); setShowConcepts(false); }}><span aria-hidden="true">{item.icon}</span><small>{item.label}</small></button>)}
+            ].map((item) => <button type="button" key={item.id} className={nav === item.id ? "selected" : ""} aria-current={nav === item.id ? "page" : undefined} onClick={() => { setNav(item.id); setSelectedHistory(null); }}><span aria-hidden="true">{item.icon}</span><small>{item.label}</small></button>)}
           </nav>
         )}
 

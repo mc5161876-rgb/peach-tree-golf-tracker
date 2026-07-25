@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import { headers } from "next/headers";
+import { CLUB_DESCRIPTION, CLUB_IDENTITY, CLUB_PAGE_TITLE } from "./data/mock-course";
 import "./globals.css";
 
 const geist = Geist({
@@ -14,17 +15,20 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = host.startsWith("localhost") || host.startsWith("127.0.0.1") ? "http" : "https";
   const metadataBase = new URL(`${protocol}://${host}`);
 
+  const socialTitle = CLUB_IDENTITY.fullName;
+  const socialDescription = `Your game at ${CLUB_IDENTITY.fullName}, one round at a time.`;
+
   return {
     metadataBase,
-    title: "Roundwell at Peach Tree — Personal Golf Scoring",
-    description: "Premium mobile golf scoring and illustrated hole guides for Peach Tree Golf & Country Club in Marysville, California.",
-    applicationName: "Roundwell",
+    title: CLUB_PAGE_TITLE,
+    description: CLUB_DESCRIPTION,
+    applicationName: CLUB_IDENTITY.shortName,
     manifest: "/manifest.webmanifest",
     formatDetection: { telephone: false },
     appleWebApp: {
       capable: true,
       statusBarStyle: "black-translucent",
-      title: "Roundwell",
+      title: CLUB_IDENTITY.shortName,
     },
     icons: {
       icon: "/favicon.svg",
@@ -32,15 +36,15 @@ export async function generateMetadata(): Promise<Metadata> {
       apple: "/favicon.svg",
     },
     openGraph: {
-      title: "Roundwell at Peach Tree",
-      description: "Your game at Peach Tree Golf & Country Club, one round at a time.",
+      title: socialTitle,
+      description: socialDescription,
       type: "website",
-      images: [{ url: "/og.png", width: 1536, height: 1024, alt: "Roundwell course atlas for Peach Tree Golf & Country Club in Marysville, California" }],
+      images: [{ url: "/og.png", width: 1536, height: 1024, alt: `Illustrated course atlas for ${CLUB_IDENTITY.fullName} in ${CLUB_IDENTITY.location}` }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Roundwell at Peach Tree",
-      description: "Your game at Peach Tree Golf & Country Club, one round at a time.",
+      title: socialTitle,
+      description: socialDescription,
       images: ["/og.png"],
     },
   };

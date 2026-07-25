@@ -1,0 +1,292 @@
+{
+  "course": "Peach Tree Golf & Country Club",
+  "imagery": {
+    "source": "USDA NAIP via USGS The National Map",
+    "acquired": "2022-07-09",
+    "publicDomain": true,
+    "url": "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?bbox=-121.553,39.135,-121.530,39.152&bboxSR=4326&size=4000,2957&imageSR=4326&format=jpg&f=image"
+  },
+  "centerlines": {
+    "source": "OpenStreetMap contributors",
+    "license": "ODbL",
+    "url": "https://www.openstreetmap.org/way/1426341377",
+    "holes": {
+      "1": [
+        [
+          39.1384472,
+          -121.5419038
+        ],
+        [
+          39.1377635,
+          -121.5442419
+        ],
+        [
+          39.1369162,
+          -121.5456708
+        ]
+      ],
+      "2": [
+        [
+          39.1366153,
+          -121.5461288
+        ],
+        [
+          39.1362376,
+          -121.5489236
+        ],
+        [
+          39.1361643,
+          -121.5516628
+        ]
+      ],
+      "3": [
+        [
+          39.136542,
+          -121.5524511
+        ],
+        [
+          39.1372192,
+          -121.5509774
+        ]
+      ],
+      "4": [
+        [
+          39.1378254,
+          -121.5510758
+        ],
+        [
+          39.1371959,
+          -121.548887
+        ],
+        [
+          39.1372368,
+          -121.5465862
+        ]
+      ],
+      "5": [
+        [
+          39.1376731,
+          -121.5464387
+        ],
+        [
+          39.1380348,
+          -121.5491325
+        ],
+        [
+          39.1383566,
+          -121.5510967
+        ]
+      ],
+      "6": [
+        [
+          39.1391245,
+          -121.5517345
+        ],
+        [
+          39.1389936,
+          -121.5493065
+        ],
+        [
+          39.1393358,
+          -121.5478303
+        ],
+        [
+          39.1398651,
+          -121.5466615
+        ]
+      ],
+      "7": [
+        [
+          39.1400272,
+          -121.5460789
+        ],
+        [
+          39.1382226,
+          -121.5463081
+        ]
+      ],
+      "8": [
+        [
+          39.1374376,
+          -121.54602
+        ],
+        [
+          39.1391993,
+          -121.5452132
+        ],
+        [
+          39.140468,
+          -121.5449704
+        ]
+      ],
+      "9": [
+        [
+          39.1409719,
+          -121.5442122
+        ],
+        [
+          39.1394143,
+          -121.5429704
+        ],
+        [
+          39.138787,
+          -121.5418252
+        ]
+      ],
+      "10": [
+        [
+          39.1395487,
+          -121.5414312
+        ],
+        [
+          39.1414199,
+          -121.5415234
+        ],
+        [
+          39.1425416,
+          -121.5411675
+        ]
+      ],
+      "11": [
+        [
+          39.1430774,
+          -121.5405113
+        ],
+        [
+          39.1441723,
+          -121.5385668
+        ],
+        [
+          39.1463564,
+          -121.5376625
+        ]
+      ],
+      "12": [
+        [
+          39.1466559,
+          -121.5380277
+        ],
+        [
+          39.1481832,
+          -121.5361721
+        ],
+        [
+          39.1494416,
+          -121.5354302
+        ]
+      ],
+      "13": [
+        [
+          39.1503946,
+          -121.5348006
+        ],
+        [
+          39.1498911,
+          -121.5322393
+        ],
+        [
+          39.1492781,
+          -121.5310311
+        ]
+      ],
+      "14": [
+        [
+          39.1487707,
+          -121.5307453
+        ],
+        [
+          39.1478159,
+          -121.5322887
+        ]
+      ],
+      "15": [
+        [
+          39.1475997,
+          -121.5329512
+        ],
+        [
+          39.1494119,
+          -121.5331818
+        ],
+        [
+          39.1498343,
+          -121.5348003
+        ]
+      ],
+      "16": [
+        [
+          39.1489272,
+          -121.5345149
+        ],
+        [
+          39.1471396,
+          -121.5357475
+        ],
+        [
+          39.1458846,
+          -121.5363038
+        ]
+      ],
+      "17": [
+        [
+          39.1455947,
+          -121.5368303
+        ],
+        [
+          39.1441015,
+          -121.5374404
+        ]
+      ],
+      "18": [
+        [
+          39.1437726,
+          -121.5378836
+        ],
+        [
+          39.1420447,
+          -121.5395204
+        ],
+        [
+          39.1409021,
+          -121.540705
+        ],
+        [
+          39.140059,
+          -121.5410144
+        ]
+      ]
+    }
+  },
+  "illustrations": {
+    "source": "Built-in OpenAI image generation, one transformation per hole",
+    "style": "Cinematic 2.5D premium yardage-book environment",
+    "referenceImagery": "Each matching 2022 USDA NAIP-derived aerial hole card",
+    "referenceGeometry": "OpenStreetMap contributors",
+    "authoritative": false,
+    "localRefinements": {
+      "4": "The dogleg left begins earlier than the July 2022 aerial suggests; exact current geometry remains unconfirmed.",
+      "6": "A large mature tree on the left side extends low branches and canopy across roughly half the fairway.",
+      "7": "The pond has since been cleaned up and is represented as maintained open water with a neat shoreline."
+    },
+    "files": [
+      "hole-01-illustrated.png",
+      "hole-02-illustrated.png",
+      "hole-03-illustrated.png",
+      "hole-04-illustrated.png",
+      "hole-05-illustrated.png",
+      "hole-06-illustrated.png",
+      "hole-07-illustrated.png",
+      "hole-08-illustrated.png",
+      "hole-09-illustrated.png",
+      "hole-10-illustrated.png",
+      "hole-11-illustrated.png",
+      "hole-12-illustrated.png",
+      "hole-13-illustrated.png",
+      "hole-14-illustrated.png",
+      "hole-15-illustrated.png",
+      "hole-16-illustrated.png",
+      "hole-17-illustrated.png",
+      "hole-18-illustrated.png"
+    ]
+  }
+}

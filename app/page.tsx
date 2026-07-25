@@ -815,7 +815,7 @@ export default function GolfTracker() {
       <div className="app-frame">
         {showStandardChrome && (
           <header className="app-header">
-            <button type="button" className="brand" onClick={() => { setNav("home"); setSelectedHistory(null); }} aria-label={`${CLUB_IDENTITY.wordmark} home`}><span className="brand-mark">{CLUB_IDENTITY.crest}<i /></span><span><b>{CLUB_IDENTITY.wordmark}</b><small>{CLUB_IDENTITY.headerSubtitle}</small></span></button>
+            <button type="button" className="brand" onClick={() => { setNav("home"); setSelectedHistory(null); }} aria-label={`${CLUB_IDENTITY.wordmark} home`}><span className="brand-mark"><Image src="/icons/crest-84.png" alt="" width={42} height={42} priority unoptimized /></span><span><b>{CLUB_IDENTITY.wordmark}</b><small>{CLUB_IDENTITY.headerSubtitle}</small></span></button>
             <button type="button" className="lab-pill" onClick={() => setShowLab(true)}>◫ Prototype Lab</button>
           </header>
         )}

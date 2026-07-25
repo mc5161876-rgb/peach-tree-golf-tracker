@@ -20,12 +20,15 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait-primary",
     background_color: "#f3eddf",
     theme_color: "#123d2c",
-    // The static manifest declared a single icon with purpose "any maskable".
-    // Next's Manifest type only accepts one purpose per entry, so the same icon
-    // is listed twice — equivalent to the space-separated form per the spec.
+    // Raster rather than SVG: the crest is generated artwork, and both the
+    // hand-traced and Codex-authored vector versions distorted the peach's
+    // proportions. Next's Manifest type allows one purpose per entry, so the
+    // maskable declaration is a second entry — equivalent to the
+    // space-separated "any maskable" form per the spec.
     icons: [
-      { src: "/favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
-      { src: "/favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+      { src: "/icons/crest-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icons/crest-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icons/crest-512-fullbleed.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
 }

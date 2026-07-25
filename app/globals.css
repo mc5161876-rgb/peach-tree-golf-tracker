@@ -133,23 +133,14 @@ textarea:focus-visible {
   height: 42px;
   margin-right: 10px;
   place-items: center;
-  overflow: hidden;
-  border-radius: 14px;
-  color: var(--on-brand);
-  background: var(--brand);
-  font-size: 18px;
-  font-weight: 800;
 }
 
-.brand-mark i {
-  position: absolute;
-  right: -8px;
-  bottom: 5px;
-  width: 28px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: rotate(-28deg);
+/* The crest artwork carries its own tile and rounding, so the mark is just a
+   frame for it — no background or accent flourish of its own. */
+.brand-mark img {
+  width: 42px;
+  height: 42px;
+  display: block;
 }
 
 .brand > span:last-child {

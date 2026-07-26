@@ -24,6 +24,22 @@ NAIP_URL = (
     "?bbox=-121.553,39.135,-121.530,39.152"
     "&bboxSR=4326&size=4000,2957&imageSR=4326&format=jpg&f=image"
 )
+CARD_SIZE = (900, 1200)
+
+
+def naip_source_size() -> tuple[int, int]:
+    """The raster dimensions NAIP_URL asks for, read from the URL itself.
+
+    The card transform is expressed in source-raster pixels, so the geometry
+    export needs these numbers even when no raster is on disk. Parsing the URL
+    keeps them from drifting away from what the download actually requests.
+    """
+    for parameter in NAIP_URL.split("?", 1)[1].split("&"):
+        key, _, value = parameter.partition("=")
+        if key == "size":
+            width, _, height = value.partition(",")
+            return int(width), int(height)
+    raise ValueError("NAIP_URL has no size parameter")
 
 # OpenStreetMap hole centerline ways, refs 1 through 18.
 OSM_HOLE_WAYS = [
@@ -115,10 +131,19 @@ def geo_to_pixel(
     return x, y
 
 
-def atlas_card(
-    source: Image.Image, points_geo: list[tuple[float, float]], size=(900, 1200)
-) -> Image.Image:
-    source_width, source_height = source.size
+def card_transform(
+    points_geo: list[tuple[float, float]],
+    source_size: tuple[int, int],
+    size: tuple[int, int] = CARD_SIZE,
+) -> dict:
+    """Work out how one hole's card is cut from the source raster.
+
+    The card is the source rotated so the hole runs bottom-to-top, then scaled
+    to fit. Everything here is a pure function of the centerline, the bounding
+    box, and the two image sizes — no pixel data is involved — which is why the
+    same values can be exported without regenerating any imagery.
+    """
+    source_width, source_height = source_size
     points = [
         geo_to_pixel(lat, lon, source_width, source_height)
         for lat, lon in points_geo
@@ -145,6 +170,43 @@ def atlas_card(
         (max(across) - min(across) + 360) / output_width,
     )
 
+    return {
+        "center": {"x": center_x, "y": center_y},
+        "unit": {"x": unit_x, "y": unit_y},
+        "perp": {"x": perp_x, "y": perp_y},
+        "scale": scale,
+    }
+
+
+def transform_to_card(
+    point: tuple[float, float], transform: dict, size: tuple[int, int] = CARD_SIZE
+) -> tuple[float, float]:
+    """Source-raster pixel to card pixel."""
+    output_width, output_height = size
+    offset_x = point[0] - transform["center"]["x"]
+    offset_y = point[1] - transform["center"]["y"]
+    unit, perp, scale = transform["unit"], transform["perp"], transform["scale"]
+    x = output_width / 2 + (offset_x * perp["x"] + offset_y * perp["y"]) / scale
+    y = output_height / 2 - (offset_x * unit["x"] + offset_y * unit["y"]) / scale
+    return x, y
+
+
+def atlas_card(
+    source: Image.Image, points_geo: list[tuple[float, float]], size=CARD_SIZE
+) -> Image.Image:
+    source_width, source_height = source.size
+    points = [
+        geo_to_pixel(lat, lon, source_width, source_height)
+        for lat, lon in points_geo
+    ]
+    transform = card_transform(points_geo, source.size, size)
+    center_x = transform["center"]["x"]
+    center_y = transform["center"]["y"]
+    unit_x, unit_y = transform["unit"]["x"], transform["unit"]["y"]
+    perp_x, perp_y = transform["perp"]["x"], transform["perp"]["y"]
+    scale = transform["scale"]
+    output_width, output_height = size
+
     a = scale * perp_x
     b = -scale * unit_x
     c = center_x - a * output_width / 2 - b * output_height / 2
@@ -160,14 +222,7 @@ def atlas_card(
     )
     card = color_grade(card)
 
-    def to_card(point: tuple[float, float]) -> tuple[float, float]:
-        offset_x = point[0] - center_x
-        offset_y = point[1] - center_y
-        x = output_width / 2 + (offset_x * perp_x + offset_y * perp_y) / scale
-        y = output_height / 2 - (offset_x * unit_x + offset_y * unit_y) / scale
-        return x, y
-
-    route = [to_card(point) for point in points]
+    route = [transform_to_card(point, transform, size) for point in points]
     overlay = Image.new("RGBA", size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     draw.line(route, fill=(5, 20, 14, 155), width=17, joint="curve")
@@ -203,38 +258,40 @@ def atlas_card(
     return Image.alpha_composite(card.convert("RGBA"), shade).convert("RGB")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--source", type=Path)
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("public/course/peach-tree"),
-    )
-    args = parser.parse_args()
+def build_card_geometry(
+    centerlines: dict[int, list[tuple[float, float]]],
+    source_size: tuple[int, int],
+) -> dict:
+    """The per-hole transforms, in the shape the app consumes.
 
-    source_path = args.source or Path("tmp/imagegen/peach-tree-naip-source.jpg")
-    if not source_path.exists():
-        download_naip(source_path)
+    Values shared by every hole sit at the top; each hole carries only what is
+    unique to it. Card pixels are converted to real coordinates by inverting
+    these, so anything measured on a hole card depends on them being right.
+    """
+    min_lon, min_lat, max_lon, max_lat = COURSE_BBOX
+    source_width, source_height = source_size
+    card_width, card_height = CARD_SIZE
+    return {
+        "bbox": {
+            "minLon": min_lon,
+            "minLat": min_lat,
+            "maxLon": max_lon,
+            "maxLat": max_lat,
+        },
+        "source": {"width": source_width, "height": source_height},
+        "card": {"width": card_width, "height": card_height},
+        "holes": {
+            str(number): card_transform(centerlines[number], source_size)
+            for number in range(1, 19)
+        },
+    }
 
-    output = args.output
-    output.mkdir(parents=True, exist_ok=True)
-    source = Image.open(source_path).convert("RGB")
-    centerlines = fetch_centerlines()
 
-    overview = add_vignette(color_grade(source.resize((1600, 1183))))
-    overview.save(output / "course-aerial.webp", "WEBP", quality=84, method=6)
-
-    for hole_number in range(1, 19):
-        card = atlas_card(source, centerlines[hole_number])
-        card.save(
-            output / f"hole-{hole_number:02d}.webp",
-            "WEBP",
-            quality=84,
-            method=6,
-        )
-
-    geometry = {
+def sources_payload(
+    centerlines: dict[int, list[tuple[float, float]]],
+    source_size: tuple[int, int],
+) -> dict:
+    return {
         "course": "Peach Tree Golf & Country Club",
         "imagery": {
             "source": "USDA NAIP via USGS The National Map",
@@ -250,10 +307,74 @@ def main() -> None:
                 str(number): centerlines[number] for number in range(1, 19)
             },
         },
+        "cardGeometry": build_card_geometry(centerlines, source_size),
     }
+
+
+def write_sources(output: Path, payload: dict) -> None:
     (output / "sources.json").write_text(
-        json.dumps(geometry, indent=2) + "\n", encoding="utf-8"
+        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
     )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", type=Path)
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("public/course/peach-tree"),
+    )
+    parser.add_argument(
+        "--geometry-only",
+        action="store_true",
+        help=(
+            "Recompute cardGeometry from the centerlines already in "
+            "sources.json and rewrite that file. Touches no imagery, downloads "
+            "nothing, and leaves the centerlines exactly as they are."
+        ),
+    )
+    args = parser.parse_args()
+
+    output = args.output
+    output.mkdir(parents=True, exist_ok=True)
+
+    if args.geometry_only:
+        existing = json.loads((output / "sources.json").read_text(encoding="utf-8"))
+        centerlines = {
+            number: [
+                (point[0], point[1])
+                for point in existing["centerlines"]["holes"][str(number)]
+            ]
+            for number in range(1, 19)
+        }
+        existing["cardGeometry"] = build_card_geometry(
+            centerlines, naip_source_size()
+        )
+        write_sources(output, existing)
+        print(f"Wrote cardGeometry for 18 holes to {(output / 'sources.json').resolve()}")
+        return
+
+    source_path = args.source or Path("tmp/imagegen/peach-tree-naip-source.jpg")
+    if not source_path.exists():
+        download_naip(source_path)
+
+    source = Image.open(source_path).convert("RGB")
+    centerlines = fetch_centerlines()
+
+    overview = add_vignette(color_grade(source.resize((1600, 1183))))
+    overview.save(output / "course-aerial.webp", "WEBP", quality=84, method=6)
+
+    for hole_number in range(1, 19):
+        card = atlas_card(source, centerlines[hole_number])
+        card.save(
+            output / f"hole-{hole_number:02d}.webp",
+            "WEBP",
+            quality=84,
+            method=6,
+        )
+
+    write_sources(output, sources_payload(centerlines, source.size))
     print(f"Generated 18 hole cards and course overview in {output.resolve()}")
 
 

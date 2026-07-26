@@ -27,6 +27,22 @@ NAIP_URL = (
 )
 CARD_SIZE = (900, 1200)
 
+# How much taller the card is than the hole it shows.
+#
+# The old crop padded a fixed 310x360 source pixels regardless of hole length,
+# which framed the average hole at 1.78x its own length and the short par 3s at
+# up to 2.56x — enough that hole 7's card showed holes 5 and 8 as well. Scaling
+# the frame to the hole instead keeps every hole filling its card the same way.
+TARGET_FRAME_RATIO = 1.25
+
+# Absolute floor on the breathing room at each end, whichever way the ratio
+# works out. Twenty yards is about the width of a green: a shot that misses by
+# a green's width is still on the card rather than cropped off it. On the
+# shortest hole (3, at 162 yards) the 1.25 ratio already yields just over this,
+# so the floor almost never binds — it exists so a very short hole cannot crop
+# to nothing.
+MIN_MARGIN_YARDS = 20.0
+
 
 def naip_source_size() -> tuple[int, int]:
     """The raster dimensions NAIP_URL asks for, read from the URL itself.
@@ -100,6 +116,23 @@ def distance_yards(
         * math.sin(delta_lon / 2) ** 2
     )
     return 2 * EARTH_RADIUS_METRES * math.asin(math.sqrt(a)) * YARDS_PER_METRE
+
+
+def source_metres_per_pixel(source_size: tuple[int, int]) -> tuple[float, float]:
+    """Ground distance covered by one source-raster pixel, along each axis.
+
+    The raster is stored in degrees, so a pixel is wider in latitude than in
+    longitude at this latitude. Uses the same earth radius as `distance_yards`
+    so a frame solved here cannot disagree with a yardage measured there.
+    """
+    min_lon, min_lat, max_lon, max_lat = COURSE_BBOX
+    source_width, source_height = source_size
+    mid_lat = math.radians((min_lat + max_lat) / 2)
+    metres_per_degree = math.radians(1.0) * EARTH_RADIUS_METRES
+    return (
+        (max_lon - min_lon) / source_width * metres_per_degree * math.cos(mid_lat),
+        (max_lat - min_lat) / source_height * metres_per_degree,
+    )
 
 
 def polygon_centroid(points: list[tuple[float, float]]) -> tuple[float, float]:
@@ -300,10 +333,36 @@ def card_transform(
         (x - center_x) * perp_x + (y - center_y) * perp_y for x, y in points
     ]
     output_width, output_height = size
-    scale = max(
-        (max(along) - min(along) + 310) / output_height,
-        (max(across) - min(across) + 360) / output_width,
+
+    # Source pixels are not square on the ground: one pixel spans a different
+    # number of metres east-west than north-south, because the raster is in
+    # degrees. So how many metres a pixel covers depends on which way the hole
+    # runs, and the frame has to be solved in metres rather than pixels or a
+    # north-south hole would end up framed differently from an east-west one.
+    metres_per_pixel_x, metres_per_pixel_y = source_metres_per_pixel(source_size)
+    metres_along = math.hypot(unit_x * metres_per_pixel_x, unit_y * metres_per_pixel_y)
+    metres_across = math.hypot(perp_x * metres_per_pixel_x, perp_y * metres_per_pixel_y)
+
+    hole_metres = sum(
+        distance_yards(points_geo[index - 1], points_geo[index])
+        for index in range(1, len(points_geo))
+    ) / YARDS_PER_METRE
+
+    # The frame we want: a fixed multiple of how long the hole actually plays.
+    target = TARGET_FRAME_RATIO * hole_metres / (output_height * metres_along)
+
+    # The frame we need: the hole itself, plus a margin at every edge. The
+    # projected span is never longer than the walked path, so on a straight
+    # hole this sits below the target and does nothing.
+    margin = MIN_MARGIN_YARDS / YARDS_PER_METRE
+    fits_along = ((max(along) - min(along)) * metres_along + 2 * margin) / (
+        output_height * metres_along
     )
+    fits_across = ((max(across) - min(across)) * metres_across + 2 * margin) / (
+        output_width * metres_across
+    )
+
+    scale = max(target, fits_along, fits_across)
 
     return {
         "center": {"x": center_x, "y": center_y},
@@ -502,6 +561,18 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--cards-only",
+        action="store_true",
+        help=(
+            "Recut all 18 hole cards and the overview from the centerlines "
+            "already in sources.json, and rewrite cardGeometry to match. "
+            "Needs the NAIP raster and will download it if absent, but "
+            "contacts OpenStreetMap for nothing: centerlines and greens are "
+            "read from the file and the greens block is left untouched. This "
+            "is the path for a change to how cards are framed."
+        ),
+    )
+    parser.add_argument(
         "--greens-only",
         action="store_true",
         help=(
@@ -517,8 +588,49 @@ def main() -> None:
     output = args.output
     output.mkdir(parents=True, exist_ok=True)
 
-    if args.geometry_only and args.greens_only:
-        parser.error("--geometry-only and --greens-only do different things; pick one")
+    exclusive = [args.geometry_only, args.greens_only, args.cards_only]
+    if sum(bool(flag) for flag in exclusive) > 1:
+        parser.error(
+            "--geometry-only, --greens-only, and --cards-only do different "
+            "things; pick one"
+        )
+
+    def stored_centerlines() -> tuple[dict, dict[int, list[tuple[float, float]]]]:
+        existing = json.loads((output / "sources.json").read_text(encoding="utf-8"))
+        return existing, {
+            number: [
+                (point[0], point[1])
+                for point in existing["centerlines"]["holes"][str(number)]
+            ]
+            for number in range(1, 19)
+        }
+
+    if args.cards_only:
+        existing, centerlines = stored_centerlines()
+        source_path = args.source or Path("tmp/imagegen/peach-tree-naip-source.jpg")
+        if not source_path.exists():
+            download_naip(source_path)
+        source = Image.open(source_path).convert("RGB")
+
+        overview = add_vignette(color_grade(source.resize((1600, 1183))))
+        overview.save(output / "course-aerial.webp", "WEBP", quality=84, method=6)
+
+        for hole_number in range(1, 19):
+            card = atlas_card(source, centerlines[hole_number])
+            card.save(
+                output / f"hole-{hole_number:02d}.webp",
+                "WEBP",
+                quality=84,
+                method=6,
+            )
+
+        existing["cardGeometry"] = build_card_geometry(centerlines, source.size)
+        write_sources(output, existing)
+        print(
+            f"Recut 18 hole cards at {TARGET_FRAME_RATIO:.2f}x framing in "
+            f"{output.resolve()}; greens and centerlines untouched"
+        )
+        return
 
     if args.greens_only:
         existing = json.loads((output / "sources.json").read_text(encoding="utf-8"))

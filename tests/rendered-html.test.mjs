@@ -106,6 +106,40 @@ test("brands the app to the club from a single identity constant", async () => {
 
   // The "Name & icon concepts" screen is gone.
   assert.doesNotMatch(page, /NameConcepts|showConcepts|concepts-link|mini-concepts/);
+
+  // The header mark is the crest artwork, not a letterform, and the retired
+  // PT favicon is gone.
+  assert.match(page, /brand-mark"><Image src="\/icons\/crest-84\.png"/);
+  assert.doesNotMatch(page, /favicon\.svg/);
+  assert.doesNotMatch(layout, /favicon\.svg/);
+  assert.doesNotMatch(manifestModule, /favicon\.svg/);
+});
+
+test("ships the crest icon set at every size the platforms ask for", async () => {
+  const expected = [
+    ["crest-512.png", 512],
+    ["crest-512-fullbleed.png", 512],
+    ["crest-192.png", 192],
+    ["crest-180-fullbleed.png", 180],
+    ["crest-84.png", 84],
+    ["crest-32.png", 32],
+    ["crest-16.png", 16],
+  ];
+
+  for (const [name, size] of expected) {
+    const file = await stat(new URL(`../public/icons/${name}`, import.meta.url));
+    assert.ok(file.size > 200, `${name} should exist and not be empty`);
+    // A 512 that weighs less than a 16 would mean the resize silently failed.
+    assert.ok(file.size < 200_000, `${name} is unexpectedly large for a ${size}px icon`);
+  }
+
+  const manifest = await (await fetchPath("/manifest.webmanifest", "application/manifest+json")).json();
+  const srcs = manifest.icons.map((icon) => icon.src);
+  assert.ok(srcs.every((src) => src.startsWith("/icons/crest-")), "manifest icons should point at the crest set");
+  assert.ok(
+    manifest.icons.some((icon) => icon.purpose === "maskable" && icon.src.includes("fullbleed")),
+    "the maskable icon must be the full-bleed variant — a transparent one shows through the OS mask",
+  );
 });
 
 test("renders the club identity in the served shell", async () => {

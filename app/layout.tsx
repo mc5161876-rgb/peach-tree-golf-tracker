@@ -31,9 +31,12 @@ export async function generateMetadata(): Promise<Metadata> {
       title: CLUB_IDENTITY.shortName,
     },
     icons: {
-      icon: "/favicon.svg",
-      shortcut: "/favicon.svg",
-      apple: "/favicon.svg",
+      icon: [
+        { url: "/icons/crest-32.png", sizes: "32x32", type: "image/png" },
+        { url: "/icons/crest-16.png", sizes: "16x16", type: "image/png" },
+      ],
+      shortcut: "/icons/crest-32.png",
+      apple: { url: "/icons/crest-180-fullbleed.png", sizes: "180x180" },
     },
     openGraph: {
       title: socialTitle,

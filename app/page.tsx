@@ -1,9 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { CLUB_IDENTITY, HOME_COURSE, NEGATIVE_TAGS, POSITIVE_TAGS, TEE_OPTIONS, teeLabel, type Tee } from "./data/mock-course";
 import { MOCK_ROUNDS, type MockRound } from "./data/mock-history";
+import { CARD_SIZE, COURSE_BOUNDS, holeCardGeometry, holeGreen, holeTee } from "./data/course-atlas";
+import { cardPointToCover, coverPointToCard, isWithinCourse, measureCrosshair } from "./data/measure";
+import { cardPointToLatLon, latLonToCardPoint, type CardPoint, type LatLon } from "./data/course-geometry";
 
 type Theme = "club" | "sport" | "clean";
 type ScoreMethod = "stepper" | "numbers" | "relative";
@@ -14,6 +17,9 @@ type RoundPhase = "setup" | "active" | "summary";
 type CelebrationKind = "birdie" | "eagle";
 type CelebrationState = { kind: CelebrationKind; id: number };
 type HoleVisualMode = "illustrated" | "aerial";
+/** Why the yardage tool is or isn't measuring from Mario's own position. */
+type LocationState = "idle" | "unsupported" | "denied" | "searching" | "off-course" | "located";
+type GeolocationFix = { kind: "position"; value: LatLon } | { kind: "denied" } | null;
 
 type HoleEntry = { score?: number; tags: string[]; note: string };
 type Entries = Record<number, HoleEntry>;
@@ -198,10 +204,18 @@ export default function GolfTracker() {
   const [selectedHoleHistory, setSelectedHoleHistory] = useState<number | null>(null);
   const [savedRoundId, setSavedRoundId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  // Which hole and round phase the yardage tool was opened for — see the
+  // derivation below for why it is scoped rather than a plain boolean.
+  const [measureSession, setMeasureSession] = useState<{ hole: number; phase: RoundPhase } | null>(null);
+  // Held in card pixels, not screen pixels, so resizing the window cannot move
+  // the point Mario chose.
+  const [crosshairPin, setCrosshairPin] = useState<{ hole: number; point: CardPoint } | null>(null);
+  const [fix, setFix] = useState<GeolocationFix>(null);
   const celebrationIdRef = useRef(0);
   const celebrationTimerRef = useRef<number | null>(null);
   const holeAtlasTriggerRef = useRef<HTMLButtonElement | null>(null);
   const holeGuideDialogRef = useRef<HTMLElement | null>(null);
+  const holeVisualRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     ["/celebrations/birdie.png", "/celebrations/eagle.png"].forEach((src) => {
@@ -317,6 +331,130 @@ export default function GolfTracker() {
     : showingIllustration ? "AI illustrated concept" : HOME_COURSE.guideLabel;
   const currentEntry = entries[currentHole] ?? { tags: [], note: "" };
   const displayedScore = currentEntry.score ?? hole.par;
+
+  const holeGeometry = useMemo(() => holeCardGeometry(currentHole), [currentHole]);
+  const holeTeePoint = useMemo(() => holeTee(currentHole), [currentHole]);
+  const holeGreenPoint = useMemo(() => holeGreen(currentHole), [currentHole]);
+
+  // AC-9 — the crosshair belongs to one hole in one round. Leaving either drops
+  // it, and it is never persisted.
+  // Stored with the hole it was placed on, so it simply stops applying anywhere
+  // else. Nothing to clear on navigation, and no stale frame while a reset
+  // lands. Never persisted (NG-3).
+  const measuring = measureSession !== null && measureSession.hole === currentHole && measureSession.phase === roundPhase;
+  const crosshair = crosshairPin && crosshairPin.hole === currentHole ? crosshairPin.point : null;
+
+  // Geolocation needs a secure context. On localhost it works; over a plain LAN
+  // address on a phone the API is simply absent — MAR-18's job to fix, not
+  // something this tool can talk its way around. Gated on `hydrated` so the
+  // server and client render the same markup.
+  const geolocationAvailable = hydrated && window.isSecureContext && "geolocation" in navigator;
+
+  const locationState: LocationState = !measuring
+    ? "idle"
+    : !geolocationAvailable
+      ? "unsupported"
+      : fix === null
+        ? "searching"
+        : fix.kind === "denied"
+          ? "denied"
+          : isWithinCourse(fix.value, COURSE_BOUNDS)
+            ? "located"
+            : "off-course";
+
+  // Live position, only while measuring. Watching costs battery, so it starts
+  // when the tool opens and stops the moment it closes.
+  useEffect(() => {
+    if (!measuring || !geolocationAvailable) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => setFix({ kind: "position", value: { lat: position.coords.latitude, lon: position.coords.longitude } }),
+      () => setFix({ kind: "denied" }),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [measuring, geolocationAvailable]);
+
+  // The card is drawn with object-fit: cover, so screen positions depend on the
+  // box's live size rather than on a fixed ratio.
+  const [visualBox, setVisualBox] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    const element = holeVisualRef.current;
+    if (!element) return;
+    const update = () => setVisualBox({ width: element.clientWidth, height: element.clientHeight });
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [showHoleGuide]);
+
+  // AC-7 — a fix from off the property is not a usable "you are here", it is a
+  // wrong one, so it is discarded rather than drawn in the wrong place.
+  const usablePosition = fix?.kind === "position" && isWithinCourse(fix.value, COURSE_BOUNDS) ? fix.value : null;
+  const readout = crosshair
+    ? measureCrosshair({
+        crosshair: cardPointToLatLon(crosshair, holeGeometry),
+        tee: holeTeePoint,
+        green: holeGreenPoint,
+        position: usablePosition,
+        bounds: COURSE_BOUNDS,
+      })
+    : null;
+
+  const crosshairAt = crosshair && visualBox ? cardPointToCover(crosshair, visualBox, CARD_SIZE) : null;
+  const positionAt = usablePosition && visualBox
+    ? cardPointToCover(latLonToCardPoint(usablePosition, holeGeometry), visualBox, CARD_SIZE)
+    : null;
+  const positionOnCard = Boolean(
+    positionAt && visualBox &&
+    positionAt.x >= 0 && positionAt.x <= visualBox.width &&
+    positionAt.y >= 0 && positionAt.y <= visualBox.height,
+  );
+
+  // Keyed off the location state rather than the readout: the readout does not
+  // exist until a crosshair is placed, and a valid fix must not be described as
+  // "unavailable" in the meantime. `located` is true exactly when
+  // `usablePosition` is set, so the line and the number can never disagree.
+  const measureReferenceLine = locationState === "located"
+    ? "Measuring from your position — live"
+    : locationState === "unsupported"
+      ? "Measuring from the tee — location needs a secure (https) connection"
+      : locationState === "denied"
+        ? "Measuring from the tee — location permission denied"
+        : locationState === "off-course"
+          ? "Measuring from the tee — reported location is off the course"
+          : locationState === "searching"
+            ? "Measuring from the tee — looking for your location"
+            : "Measuring from the tee — location unavailable";
+
+  const startMeasuring = () => {
+    // AC-2 — the illustrated card is an AI re-render whose geometry drifted.
+    // Measuring on it would produce confidently wrong yardages.
+    setHoleVisualMode("aerial");
+    setFix(null);
+    setMeasureSession({ hole: currentHole, phase: roundPhase });
+  };
+
+  const stopMeasuring = () => {
+    setMeasureSession(null);
+    setCrosshairPin(null);
+  };
+
+  const placeCrosshair = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const box = holeVisualRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const container = { width: box.width, height: box.height };
+    const point = coverPointToCard(
+      {
+        x: Math.min(Math.max(event.clientX - box.left, 0), box.width),
+        y: Math.min(Math.max(event.clientY - box.top, 0), box.height),
+      },
+      container,
+      CARD_SIZE,
+    );
+    setCrosshairPin({ hole: currentHole, point });
+  };
   const currentIndex = scheduledHoles.findIndex((item) => item.number === currentHole);
 
   useEffect(() => {
@@ -885,18 +1023,52 @@ export default function GolfTracker() {
                 <div><span className="eyebrow">{holeAtlasLabel}</span><h2 id="hole-guide-title">Hole {currentHole} course guide</h2></div>
                 <button type="button" aria-label="Close hole course guide" onClick={() => setShowHoleGuide(false)}>×</button>
               </div>
-              {hole.visual.illustratedSrc && (
-                <div className="hole-guide-mode" role="group" aria-label="Hole image style">
-                  <button type="button" className={holeVisualMode === "illustrated" ? "selected" : ""} aria-pressed={holeVisualMode === "illustrated"} onClick={() => setHoleVisualMode("illustrated")}><span>Illustrated</span><small>AI concept</small></button>
-                  <button type="button" className={holeVisualMode === "aerial" ? "selected" : ""} aria-pressed={holeVisualMode === "aerial"} onClick={() => setHoleVisualMode("aerial")}><span>Aerial</span><small>2022 source</small></button>
-                </div>
-              )}
-              <div className="hole-guide-visual">
+              <div className="hole-guide-tools">
+                {hole.visual.illustratedSrc && (
+                  <div className="hole-guide-mode" role="group" aria-label="Hole image style">
+                    {/* Switching to Illustrated ends measuring — the AI card never
+                        carries a crosshair, because its geometry drifted. */}
+                    <button type="button" className={holeVisualMode === "illustrated" ? "selected" : ""} aria-pressed={holeVisualMode === "illustrated"} onClick={() => { stopMeasuring(); setHoleVisualMode("illustrated"); }}><span>Illustrated</span><small>AI concept</small></button>
+                    <button type="button" className={holeVisualMode === "aerial" ? "selected" : ""} aria-pressed={holeVisualMode === "aerial"} onClick={() => setHoleVisualMode("aerial")}><span>Aerial</span><small>2022 source</small></button>
+                  </div>
+                )}
+                <button type="button" className={`hole-guide-measure${measuring ? " selected" : ""}`} aria-pressed={measuring} onClick={() => (measuring ? stopMeasuring() : startMeasuring())}>
+                  <span>Measure</span><small>{measuring ? "Tap to exit" : "Yardages"}</small>
+                </button>
+              </div>
+              <div
+                ref={holeVisualRef}
+                className={`hole-guide-visual${measuring ? " measuring" : ""}`}
+                onPointerDown={measuring ? (event) => { event.currentTarget.setPointerCapture(event.pointerId); placeCrosshair(event); } : undefined}
+                onPointerMove={measuring ? (event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) placeCrosshair(event); } : undefined}
+                onPointerUp={measuring ? (event) => event.currentTarget.releasePointerCapture(event.pointerId) : undefined}
+              >
                 <Image src={activeHoleVisual.src} alt={activeHoleVisual.alt} fill sizes="(max-width: 560px) 100vw, 560px" unoptimized />
                 <span className="hole-guide-vignette" aria-hidden="true" />
                 <span className="hole-guide-marker green">Green</span>
                 <span className="hole-guide-marker tee">Tee</span>
+                {measuring && positionAt && positionOnCard && (
+                  <span className="measure-you" style={{ left: `${positionAt.x}px`, top: `${positionAt.y}px` }} aria-hidden="true" />
+                )}
+                {measuring && crosshairAt && (
+                  <span className="measure-crosshair" style={{ left: `${crosshairAt.x}px`, top: `${crosshairAt.y}px` }} aria-hidden="true" />
+                )}
+                {measuring && !crosshair && (
+                  <span className="measure-hint">Tap the hole to measure</span>
+                )}
               </div>
+              {measuring && (
+                <div className="measure-panel" role="group" aria-label="Yardage measurement">
+                  <div className="measure-figures">
+                    <span><small>{readout?.reference === "position" ? "Carry from you" : "Carry from tee"}</small><strong>{readout ? readout.carryYards : "—"} <em>yd</em></strong></span>
+                    <span><small>Crosshair to green</small><strong>{readout ? readout.toGreenYards : "—"} <em>yd</em></strong></span>
+                  </div>
+                  {/* AC-6 — which point produced the number is never left to inference. */}
+                  <p className={`measure-reference${locationState === "located" ? " live" : ""}`}>{measureReferenceLine}</p>
+                  {/* AC-8 / NG-4 — this is a planning aid, not a rangefinder. */}
+                  <p className="measure-accuracy">Distances run to the middle of the green as mapped, not to a surveyed pin — expect about ±10 yards.</p>
+                </div>
+              )}
               <div className="hole-guide-primary-facts">
                 <span><small>Hole</small><strong>{currentHole}</strong></span>
                 <span><small>Par</small><strong>{hole.par}</strong></span>

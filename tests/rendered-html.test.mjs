@@ -178,6 +178,14 @@ test("ships the Peach Tree course atlas with real-source attribution", async () 
     Promise.all(Array.from({ length: 18 }, (_, index) => stat(new URL(`../public/course/peach-tree/hole-${String(index + 1).padStart(2, "0")}-illustrated.png`, import.meta.url)))),
   ]);
 
+  // The banner shows the full club name where it fits and the short wordmark
+  // below 460px, where it would otherwise wrap across the Buttes. Both read
+  // from the identity constant — no hardcoded club names.
+  assert.match(page, /className="club-name-full">\{HOME_COURSE\.name\}/);
+  assert.match(page, /className="club-name-short">\{CLUB_IDENTITY\.wordmark\}/);
+  assert.match(css, /@media \(max-width: 459px\)/);
+  assert.match(css, /\.club-name-short \{\s*display: none;/);
+
   const hero = await stat(new URL("../public/course/peach-tree/clubhouse-hero.webp", import.meta.url));
   assert.ok(hero.size < 400_000, "hero banner must stay under the 400 KB budget");
   assert.ok(hero.size > 50_000, "hero banner should not be over-compressed");

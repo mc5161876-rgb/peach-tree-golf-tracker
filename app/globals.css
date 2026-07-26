@@ -622,6 +622,24 @@ p {
   color: #fffdf4;
 }
 
+/* The full club name fits on one line from 460px up (measured). Below that it
+   wraps to two lines and rises into the middle of the hero, covering the Sutter
+   Buttes. Narrow viewports get the short wordmark instead. Both come from
+   CLUB_IDENTITY, so a club rename still flows through. */
+.club-name-short {
+  display: none;
+}
+
+@media (max-width: 459px) {
+  .club-name-full {
+    display: none;
+  }
+
+  .club-name-short {
+    display: inline;
+  }
+}
+
 .course-banner-aerial .course-par b {
   color: #fffdf4;
 }

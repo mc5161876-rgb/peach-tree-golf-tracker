@@ -679,7 +679,7 @@ export default function GolfTracker() {
         <Image src={HOME_COURSE.hero} alt={`Illustrated golden-hour view down a tree-lined fairway at ${CLUB_IDENTITY.fullName}, with the Sutter Buttes on the horizon`} fill sizes="(max-width: 560px) 100vw, 560px" priority unoptimized />
         <span className="course-banner-shade" aria-hidden="true" />
         <div className="course-mark" aria-hidden="true"><span>{HOME_COURSE.monogram}</span></div>
-        <div className="course-banner-copy"><span className="eyebrow">Home course · {CLUB_IDENTITY.locality}</span><h2>{HOME_COURSE.name}</h2><p>{HOME_COURSE.address}</p></div>
+        <div className="course-banner-copy"><span className="eyebrow">Home course · {CLUB_IDENTITY.locality}</span><h2><span className="club-name-full">{HOME_COURSE.name}</span><span className="club-name-short">{CLUB_IDENTITY.wordmark}</span></h2><p>{HOME_COURSE.address}</p></div>
         <span className="course-par">PAR<br /><b>{HOME_COURSE.par}</b></span>
       </section>
       <div className="hero-credit">{HOME_COURSE.heroCredit}</div>

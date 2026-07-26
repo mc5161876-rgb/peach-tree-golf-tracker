@@ -46,3 +46,7 @@ next-env.d.ts
 
 # generated atlas scratch (NAIP source raster is re-downloadable)
 /tmp/
+
+# python bytecode
+__pycache__/
+*.pyc

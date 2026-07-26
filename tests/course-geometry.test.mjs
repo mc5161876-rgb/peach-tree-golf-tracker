@@ -167,6 +167,46 @@ test("keeps centerline lengths within 15% of the scorecard", () => {
   );
 });
 
+test("frames every hole at a fixed multiple of its own length", () => {
+  // The old crop padded a constant number of pixels, so a 162-yard par 3 got
+  // the same slack as a 546-yard par 5 and ended up framed at 2.56x its length
+  // while the par 5 sat at 1.48x. Framing has to scale with the hole or short
+  // holes show their neighbours.
+  const rows = HOLE_NUMBERS.map((holeNumber) => {
+    const geometry = holeGeometry(holeNumber);
+    const points = centerline(holeNumber);
+
+    let holeYards = 0;
+    for (let index = 1; index < points.length; index += 1) {
+      holeYards += distanceYards(points[index - 1], points[index]);
+    }
+
+    // Card height measured the way a yardage would be: down the middle of the
+    // card, through the same transform the app reads.
+    const cardYards = distanceYards(
+      cardPointToLatLon({ x: 450, y: 0 }, geometry),
+      cardPointToLatLon({ x: 450, y: 1200 }, geometry),
+    );
+
+    return { holeNumber, holeYards, cardYards, ratio: cardYards / holeYards };
+  });
+
+  console.log("Framing — card height against hole length");
+  for (const row of rows) {
+    console.log(
+      `  hole ${String(row.holeNumber).padStart(2)} · ${row.cardYards.toFixed(0).padStart(3)} yd card vs ` +
+        `${row.holeYards.toFixed(0).padStart(3)} yd hole · ${row.ratio.toFixed(3)}x`,
+    );
+  }
+
+  const outside = rows.filter((row) => row.ratio < 1.2 || row.ratio > 1.3);
+  assert.deepEqual(
+    outside.map((row) => `hole ${row.holeNumber} at ${row.ratio.toFixed(3)}x`),
+    [],
+    "holes outside 1.20x-1.30x are framed wrong for their length",
+  );
+});
+
 test("matches every hole to a distinct green", () => {
   const greens = sources.greens;
   assert.ok(greens, "sources.json should carry a greens block");

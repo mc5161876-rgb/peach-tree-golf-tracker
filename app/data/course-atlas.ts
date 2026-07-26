@@ -13,7 +13,7 @@
 
 import sources from "../../public/course/peach-tree/sources.json";
 
-import type { CardGeometry, LatLon } from "./course-geometry";
+import type { CardGeometry, GreenPolygon, LatLon } from "./course-geometry";
 
 export type CourseBounds = {
   minLon: number;
@@ -54,4 +54,27 @@ export function holeTee(holeNumber: number): LatLon {
 export function holeGreen(holeNumber: number): LatLon {
   const points = holeCenterline(holeNumber);
   return points[points.length - 1];
+}
+
+/**
+ * The mapped outline of a hole's putting surface.
+ *
+ * Unlike `holeGreen()` — a single point taken from the end of a centerline —
+ * this is the real ring OpenStreetMap maps, which is what front and back
+ * yardages need. The two coexist: the centerline point still orients the card.
+ */
+export function holeGreenPolygon(holeNumber: number): GreenPolygon {
+  const green = sources.greens.holes[holeKey(holeNumber) as keyof typeof sources.greens.holes];
+  return (green.points as number[][]).map(([lat, lon]) => ({ lat, lon }));
+}
+
+/**
+ * How far the matched green's middle sits from where the centerline ended.
+ *
+ * Written by the generator as the evidence the pairing is right. Exposed so a
+ * test can assert it rather than trusting the match blindly.
+ */
+export function holeGreenMatchOffsetYards(holeNumber: number): number {
+  return sources.greens.holes[holeKey(holeNumber) as keyof typeof sources.greens.holes]
+    .offsetYards;
 }

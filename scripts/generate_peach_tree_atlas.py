@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -65,11 +66,53 @@ OSM_HOLE_WAYS = [
 
 USER_AGENT = "RoundwellPrototype/2.0 (local course-atlas generator)"
 
+OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
-def request_bytes(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=60) as response:
+EARTH_RADIUS_METRES = 6_371_000
+YARDS_PER_METRE = 1.0936132983377078
+
+# How far a matched green's centroid may sit from the centerline's last point
+# before the match is treated as wrong rather than merely imprecise. The
+# centerline ends near the middle of the green by construction, so a good match
+# lands within a couple of yards; anything approaching this means the pairing
+# picked up a different green.
+GREEN_MATCH_TOLERANCE_YARDS = 10.0
+
+
+def request_bytes(url: str, data: bytes | None = None) -> bytes:
+    request = urllib.request.Request(url, data=data, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=120) as response:
         return response.read()
+
+
+def distance_yards(
+    first: tuple[float, float], second: tuple[float, float]
+) -> float:
+    """Great-circle distance in yards. Mirrors `distanceYards` in the app."""
+    lat1, lon1 = first
+    lat2, lon2 = second
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(delta_lat / 2) ** 2
+        + math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(delta_lon / 2) ** 2
+    )
+    return 2 * EARTH_RADIUS_METRES * math.asin(math.sqrt(a)) * YARDS_PER_METRE
+
+
+def polygon_centroid(points: list[tuple[float, float]]) -> tuple[float, float]:
+    """Mean of the ring's vertices.
+
+    Not the area centroid: OpenStreetMap green rings are sampled densely and
+    fairly evenly, so the vertex mean lands within a yard or two of the middle
+    of the putting surface, which is all "middle of the green" needs to mean.
+    """
+    return (
+        sum(point[0] for point in points) / len(points),
+        sum(point[1] for point in points) / len(points),
+    )
 
 
 def download_naip(destination: Path) -> Path:
@@ -95,6 +138,98 @@ def fetch_centerlines() -> dict[int, list[tuple[float, float]]]:
         hole_number = int(way["tags"]["ref"])
         centerlines[hole_number] = [nodes[node_id] for node_id in way["nodes"]]
     return centerlines
+
+
+def fetch_greens() -> list[dict]:
+    """Every `golf=green` polygon inside the course bounding box.
+
+    Unlike the hole centerlines these carry no `ref` tag, so they arrive
+    unlabelled and have to be matched to holes geometrically. The course also
+    has practice greens inside the same box, which is why this returns
+    everything it finds and leaves the sorting to `match_greens_to_holes`.
+    """
+    min_lon, min_lat, max_lon, max_lat = COURSE_BBOX
+    query = (
+        "[out:json][timeout:90];"
+        f'way["golf"="green"]({min_lat},{min_lon},{max_lat},{max_lon});'
+        "out geom;"
+    )
+    payload = json.loads(
+        request_bytes(OVERPASS_URL, data=urllib.parse.urlencode({"data": query}).encode())
+    )
+
+    greens = []
+    for element in payload["elements"]:
+        geometry = element.get("geometry")
+        if not geometry:
+            continue
+        points = [(node["lat"], node["lon"]) for node in geometry]
+        # Overpass closes rings by repeating the first node last; carrying the
+        # duplicate would weight the centroid toward that vertex.
+        if len(points) > 1 and points[0] == points[-1]:
+            points = points[:-1]
+        greens.append({"id": element["id"], "points": points})
+
+    if not greens:
+        raise ValueError("Overpass returned no golf=green ways for the course bbox")
+    return greens
+
+
+def match_greens_to_holes(
+    centerlines: dict[int, list[tuple[float, float]]],
+    greens: list[dict],
+) -> dict[int, dict]:
+    """Pair each hole with its green by nearest centroid to the hole's end.
+
+    The centerline's last point already sits on the putting surface, so the
+    nearest green centroid is unambiguous — every Peach Tree hole matches
+    within about two yards. Practice greens simply never win a hole.
+
+    Every failure mode raises. A silently wrong pairing would put front and
+    back yardages on the wrong green, which is worse than no yardages at all.
+    """
+    matches: dict[int, dict] = {}
+    for hole_number in range(1, 19):
+        hole_end = centerlines[hole_number][-1]
+        nearest = min(
+            greens,
+            key=lambda green: distance_yards(hole_end, polygon_centroid(green["points"])),
+        )
+        centroid = polygon_centroid(nearest["points"])
+        offset = distance_yards(hole_end, centroid)
+        if offset > GREEN_MATCH_TOLERANCE_YARDS:
+            raise ValueError(
+                f"hole {hole_number}: nearest green (way {nearest['id']}) sits "
+                f"{offset:.1f} yards from the centerline end, over the "
+                f"{GREEN_MATCH_TOLERANCE_YARDS:.0f} yard tolerance"
+            )
+        matches[hole_number] = {
+            "wayId": nearest["id"],
+            "offsetYards": offset,
+            "points": nearest["points"],
+        }
+
+    assigned = [match["wayId"] for match in matches.values()]
+    duplicates = sorted({way for way in assigned if assigned.count(way) > 1})
+    if duplicates:
+        raise ValueError(
+            "greens matched to more than one hole: "
+            + ", ".join(
+                f"way {way} → holes "
+                + ", ".join(
+                    str(number)
+                    for number, match in matches.items()
+                    if match["wayId"] == way
+                )
+                for way in duplicates
+            )
+        )
+
+    missing = [number for number in range(1, 19) if number not in matches]
+    if missing:
+        raise ValueError(f"holes with no matched green: {missing}")
+
+    return matches
 
 
 def color_grade(image: Image.Image) -> Image.Image:
@@ -287,9 +422,40 @@ def build_card_geometry(
     }
 
 
+def greens_payload(greens_by_hole: dict[int, dict]) -> dict:
+    """The matched greens, in the shape the app consumes.
+
+    `offsetYards` is kept per hole because it is the evidence the match is
+    right: it says how far the green's middle sits from where the centerline
+    said the green was. A number that grows on a future regeneration means the
+    course or the map changed.
+    """
+    return {
+        "source": "OpenStreetMap contributors",
+        "license": "ODbL",
+        "url": "https://www.openstreetmap.org/",
+        "matching": (
+            "Each hole is paired with the golf=green way whose centroid is "
+            "nearest the last point of its centerline. Practice greens inside "
+            "the course bounding box are left unassigned."
+        ),
+        "holes": {
+            str(number): {
+                "wayId": greens_by_hole[number]["wayId"],
+                "offsetYards": round(greens_by_hole[number]["offsetYards"], 3),
+                "points": [
+                    [point[0], point[1]] for point in greens_by_hole[number]["points"]
+                ],
+            }
+            for number in range(1, 19)
+        },
+    }
+
+
 def sources_payload(
     centerlines: dict[int, list[tuple[float, float]]],
     source_size: tuple[int, int],
+    greens_by_hole: dict[int, dict],
 ) -> dict:
     return {
         "course": "Peach Tree Golf & Country Club",
@@ -307,6 +473,7 @@ def sources_payload(
                 str(number): centerlines[number] for number in range(1, 19)
             },
         },
+        "greens": greens_payload(greens_by_hole),
         "cardGeometry": build_card_geometry(centerlines, source_size),
     }
 
@@ -331,13 +498,46 @@ def main() -> None:
         help=(
             "Recompute cardGeometry from the centerlines already in "
             "sources.json and rewrite that file. Touches no imagery, downloads "
-            "nothing, and leaves the centerlines exactly as they are."
+            "nothing, and leaves the centerlines and greens exactly as they are."
+        ),
+    )
+    parser.add_argument(
+        "--greens-only",
+        action="store_true",
+        help=(
+            "Fetch golf=green polygons from OpenStreetMap, match them to the "
+            "centerlines already in sources.json, and rewrite that file. "
+            "Touches no imagery and leaves centerlines and cardGeometry as "
+            "they are — the NAIP raster is 4000x2957 and re-downloading it to "
+            "add map data would be pure waste."
         ),
     )
     args = parser.parse_args()
 
     output = args.output
     output.mkdir(parents=True, exist_ok=True)
+
+    if args.geometry_only and args.greens_only:
+        parser.error("--geometry-only and --greens-only do different things; pick one")
+
+    if args.greens_only:
+        existing = json.loads((output / "sources.json").read_text(encoding="utf-8"))
+        centerlines = {
+            number: [
+                (point[0], point[1])
+                for point in existing["centerlines"]["holes"][str(number)]
+            ]
+            for number in range(1, 19)
+        }
+        greens_by_hole = match_greens_to_holes(centerlines, fetch_greens())
+        existing["greens"] = greens_payload(greens_by_hole)
+        write_sources(output, existing)
+        worst = max(match["offsetYards"] for match in greens_by_hole.values())
+        print(
+            f"Matched 18 greens in {(output / 'sources.json').resolve()} "
+            f"(worst centroid offset {worst:.1f} yards)"
+        )
+        return
 
     if args.geometry_only:
         existing = json.loads((output / "sources.json").read_text(encoding="utf-8"))
@@ -361,6 +561,7 @@ def main() -> None:
 
     source = Image.open(source_path).convert("RGB")
     centerlines = fetch_centerlines()
+    greens_by_hole = match_greens_to_holes(centerlines, fetch_greens())
 
     overview = add_vignette(color_grade(source.resize((1600, 1183))))
     overview.save(output / "course-aerial.webp", "WEBP", quality=84, method=6)
@@ -374,7 +575,7 @@ def main() -> None:
             method=6,
         )
 
-    write_sources(output, sources_payload(centerlines, source.size))
+    write_sources(output, sources_payload(centerlines, source.size, greens_by_hole))
     print(f"Generated 18 hole cards and course overview in {output.resolve()}")
 
 

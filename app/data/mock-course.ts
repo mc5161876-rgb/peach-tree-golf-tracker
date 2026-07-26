@@ -86,7 +86,14 @@ export const HOME_COURSE = {
   address: "2043 Simpson Dantoni Road",
   monogram: CLUB_IDENTITY.crest,
   par: 72,
-  aerial: "/course/peach-tree/course-aerial.webp",
+  /**
+   * Banner image on the "Let's play" screen. An AI-generated impression of the
+   * course at golden hour, not a photograph and not survey imagery — see
+   * heroCredit. The real 2022 NAIP aerial is still produced by the atlas
+   * generator as course-aerial.webp and remains the source for the hole cards.
+   */
+  hero: "/course/peach-tree/clubhouse-hero.webp",
+  heroCredit: "Illustrated impression of the course · not a photograph",
   guideLabel: "Illustrated course guide · not GPS",
   guideCredit: "2022 USDA NAIP imagery via USGS · hole routes © OpenStreetMap contributors",
   scorecardNote: "Course-reference yardages · verify against the current club scorecard",

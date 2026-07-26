@@ -178,6 +178,17 @@ test("ships the Peach Tree course atlas with real-source attribution", async () 
     Promise.all(Array.from({ length: 18 }, (_, index) => stat(new URL(`../public/course/peach-tree/hole-${String(index + 1).padStart(2, "0")}-illustrated.png`, import.meta.url)))),
   ]);
 
+  const hero = await stat(new URL("../public/course/peach-tree/clubhouse-hero.webp", import.meta.url));
+  assert.ok(hero.size < 400_000, "hero banner must stay under the 400 KB budget");
+  assert.ok(hero.size > 50_000, "hero banner should not be over-compressed");
+  assert.match(course, /hero: "\/course\/peach-tree\/clubhouse-hero\.webp"/);
+  // The banner is AI-generated. It must say so, and must not borrow the
+  // hole guides' USDA/OpenStreetMap credit, which describes real imagery.
+  assert.match(course, /heroCredit/);
+  assert.match(course, /not a photograph/);
+  assert.match(page, /HOME_COURSE\.heroCredit/);
+  assert.doesNotMatch(page, /HOME_COURSE\.aerial/);
+
   const sources = JSON.parse(sourceText);
   assert.equal(sources.imagery.publicDomain, true);
   assert.match(sources.imagery.source, /USDA NAIP via USGS/);

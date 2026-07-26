@@ -676,12 +676,13 @@ export default function GolfTracker() {
     <div className="screen setup-screen">
       <div className="page-heading"><span className="eyebrow">New round</span><h1>Let’s play.</h1><p>Three choices, then straight to the first tee.</p></div>
       <section className="course-banner course-banner-aerial">
-        <Image src={HOME_COURSE.aerial} alt={`Aerial overview of ${CLUB_IDENTITY.fullName} in ${CLUB_IDENTITY.location}`} fill sizes="(max-width: 560px) 100vw, 560px" priority unoptimized />
+        <Image src={HOME_COURSE.hero} alt={`Illustrated golden-hour view down a tree-lined fairway at ${CLUB_IDENTITY.fullName}, with the Sutter Buttes on the horizon`} fill sizes="(max-width: 560px) 100vw, 560px" priority unoptimized />
         <span className="course-banner-shade" aria-hidden="true" />
         <div className="course-mark" aria-hidden="true"><span>{HOME_COURSE.monogram}</span></div>
         <div className="course-banner-copy"><span className="eyebrow">Home course · {CLUB_IDENTITY.locality}</span><h2>{HOME_COURSE.name}</h2><p>{HOME_COURSE.address}</p></div>
         <span className="course-par">PAR<br /><b>{HOME_COURSE.par}</b></span>
       </section>
+      <div className="hero-credit">{HOME_COURSE.heroCredit}</div>
       <section className="setup-options">
         <Segmented label="Round length" value={String(roundLength) as "9" | "18"} onChange={(value) => setRoundLength(Number(value) as 9 | 18)} options={[{ value: "9", label: "9 holes" }, { value: "18", label: "18 holes" }]} />
         {roundLength === 9 && <Segmented label="Which nine?" value={nineSide} onChange={setNineSide} options={[{ value: "front", label: "Front 9" }, { value: "back", label: "Back 9" }]} />}

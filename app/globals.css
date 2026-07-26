@@ -584,7 +584,16 @@ p {
 .course-banner-aerial > img {
   z-index: 0;
   object-fit: cover;
-  object-position: 62% 63%;
+  /* Keeps the Buttes on the horizon in frame while letting the calm fairway
+     fill the lower band, where the overlay copy sits. */
+  object-position: 50% 58%;
+}
+
+.hero-credit {
+  margin: 7px 2px 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
 }
 
 .course-banner-shade {

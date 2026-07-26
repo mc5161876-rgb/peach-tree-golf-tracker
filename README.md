@@ -19,6 +19,36 @@ Open the Local URL printed by the development server (normally `http://localhost
 npm run build
 ```
 
+## Play it on the phone (Tailscale HTTPS)
+
+```powershell
+npm run serve:tailnet
+```
+
+This starts the production runtime if it is not already up, points `tailscale serve` at `127.0.0.1:3000`, and prints the address to open:
+
+```
+https://desktop-1ofknrj.tail98ce4e.ts.net/
+```
+
+Open that on the iPhone, then **Share → Add to Home Screen** to install it with the club crest and name.
+
+Why HTTPS matters: browsers refuse `navigator.geolocation` on an insecure origin. Over a plain LAN address the Measure tool falls back to measuring from the tee and says so. Over this address it measures from your real position.
+
+**Preflight.** Each check prints pass or fail by name — Tailscale running, a certificate available, a build on disk, the app healthy locally, and the tailnet address serving. If any fails, nothing is served.
+
+**It refuses to serve a stale build.** A server holding port 3000 keeps serving the build it loaded at boot, so rebuilding underneath it produces a page whose assets 404 — or worse, one that looks fine and is silently old. If the newest file in `dist/` is newer than the running process, the script stops and tells you which PID to kill. Stop it, run the script again.
+
+**Scope.** `tailscale serve` shares only inside your own tailnet — this is not `tailscale funnel` and nothing is reachable from the public internet. The address points at this desktop, so loading or updating the app needs the desktop awake. Nothing here runs as a service.
+
+To stop sharing:
+
+```powershell
+& "C:\Program Files\Tailscale\tailscale.exe" serve reset
+```
+
+The `OPEN Peach Tree Golf Score Tracker` desktop shortcut is unaffected and keeps working either way.
+
 ## Mock data
 
 - Course, holes, tee yardages, stroke indexes, and performance-tag presets: `app/data/mock-course.ts`

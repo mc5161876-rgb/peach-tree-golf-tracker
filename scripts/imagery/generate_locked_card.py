@@ -132,7 +132,18 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=20260726)
     parser.add_argument("--steps", type=int, default=30)
     parser.add_argument("--guidance", type=float, default=5.0)
-    parser.add_argument("--controlnet-scale", type=float, default=0.9)
+    parser.add_argument(
+        "--controlnet-scale",
+        type=float,
+        nargs="+",
+        default=[0.9],
+        help=(
+            "ControlNet conditioning scale(s). This, not denoise strength, is "
+            "the dial that decides how painterly the result may become: at 0.9 "
+            "the aerial dominates and strength barely matters. Every "
+            "combination of strength and scale is generated."
+        ),
+    )
     parser.add_argument("--controlnet", type=str, default=CONTROLNET_MODEL)
     parser.add_argument(
         "--cache-dir",
@@ -150,7 +161,11 @@ def main() -> None:
     print(f"Loading {args.controlnet} and SDXL into {args.cache_dir} ...")
     pipeline = load_pipeline(args.controlnet, args.cache_dir)
 
-    for strength in args.strength:
+    combinations = [
+        (strength, scale) for scale in args.controlnet_scale for strength in args.strength
+    ]
+
+    for strength, controlnet_scale in combinations:
         started = time.time()
         image = generate(
             pipeline,
@@ -159,9 +174,12 @@ def main() -> None:
             seed=args.seed,
             steps=args.steps,
             guidance=args.guidance,
-            controlnet_scale=args.controlnet_scale,
+            controlnet_scale=controlnet_scale,
         )
-        stem = f"hole-{args.hole:02d}-locked-s{strength:.2f}".replace(".", "_", 1)
+        stem = (
+            f"hole-{args.hole:02d}-locked"
+            f"-s{strength:.2f}-c{controlnet_scale:.2f}"
+        ).replace(".", "_")
         image_path = args.out / f"{stem}.png"
         image.save(image_path)
 
@@ -178,7 +196,7 @@ def main() -> None:
                     "seed": args.seed,
                     "steps": args.steps,
                     "guidance": args.guidance,
-                    "controlnetConditioningScale": args.controlnet_scale,
+                    "controlnetConditioningScale": controlnet_scale,
                     "workSize": list(WORK_SIZE),
                     "cardSize": list(CARD_SIZE),
                     "prompt": PROMPT,
@@ -191,7 +209,14 @@ def main() -> None:
             + "\n",
             encoding="utf-8",
         )
-        print(f"  strength {strength:.2f} → {image_path.name} ({time.time() - started:.0f}s)")
+        # ASCII only: the Windows console runs cp1252 and a stray arrow here
+        # crashes the run after the image is already on disk.
+        # ASCII only: the Windows console runs cp1252 and a stray arrow here
+        # crashes the run after the image is already on disk.
+        print(
+            f"  strength {strength:.2f} control {controlnet_scale:.2f} "
+            f"-> {image_path.name} ({time.time() - started:.0f}s)"
+        )
 
 
 if __name__ == "__main__":

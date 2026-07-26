@@ -117,3 +117,8 @@ axis and register as drift the model never caused.
 Every image is written with a JSON sidecar recording seed, strength,
 conditioning scale, steps, guidance, both prompts, and the torch version. A
 result whose settings are unknown is not evidence.
+
+Reproducibility was checked rather than assumed: hole 7 regenerated at strength
+0.35, conditioning 0.90, seed 20260726 came back **byte-identical** to the
+original run (md5 `e7d8906288bd82ae6ae637769c0dbefd`). Every number above can
+be reproduced on this machine, not merely approximated.

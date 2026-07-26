@@ -5,6 +5,8 @@ import test from "node:test";
 import {
   cardPointToLatLon,
   distanceYards,
+  greenCentre,
+  greenDistances,
   latLonToCardPoint,
 } from "../app/data/course-geometry.ts";
 import { HOME_COURSE } from "../app/data/mock-course.ts";
@@ -31,6 +33,22 @@ const centerline = (holeNumber) =>
 
 const blackYardage = (holeNumber) =>
   HOME_COURSE.holes.find((hole) => hole.number === holeNumber).yardages.black;
+
+const greenPolygon = (holeNumber) =>
+  sources.greens.holes[String(holeNumber)].points.map(([lat, lon]) => ({ lat, lon }));
+
+/** A point `yards` back down the hole from the green, along the closing leg. */
+function approachPoint(holeNumber, yards) {
+  const points = centerline(holeNumber);
+  const green = points[points.length - 1];
+  const previous = points[points.length - 2];
+  const legYards = distanceYards(previous, green);
+  const fraction = yards / legYards;
+  return {
+    lat: green.lat + (previous.lat - green.lat) * fraction,
+    lon: green.lon + (previous.lon - green.lon) * fraction,
+  };
+}
 
 test("exports card geometry for all 18 holes", () => {
   const geometry = sources.cardGeometry;
@@ -147,4 +165,112 @@ test("keeps centerline lengths within 15% of the scorecard", () => {
     [],
     "holes outside 15% mean the centerline no longer matches the course",
   );
+});
+
+test("matches every hole to a distinct green", () => {
+  const greens = sources.greens;
+  assert.ok(greens, "sources.json should carry a greens block");
+  assert.equal(greens.source, "OpenStreetMap contributors");
+  assert.equal(greens.license, "ODbL");
+  assert.equal(Object.keys(greens.holes).length, 18);
+
+  const assigned = HOLE_NUMBERS.map((holeNumber) => greens.holes[String(holeNumber)].wayId);
+  assert.equal(
+    new Set(assigned).size,
+    18,
+    "two holes sharing a green means the match picked the wrong one",
+  );
+
+  // The centerline already ends on the putting surface, so a correct pairing
+  // lands within a couple of yards. Anything larger is a different green.
+  let worst = 0;
+  for (const holeNumber of HOLE_NUMBERS) {
+    const green = greens.holes[String(holeNumber)];
+    assert.ok(green.points.length >= 3, `hole ${holeNumber} green needs a real ring`);
+    worst = Math.max(worst, green.offsetYards);
+    assert.ok(
+      green.offsetYards <= 10,
+      `hole ${holeNumber} green centroid sits ${green.offsetYards.toFixed(1)} yards from the centerline end`,
+    );
+  }
+
+  console.log(`Greens: worst centroid offset ${worst.toFixed(2)} yards`);
+});
+
+test("orders front, middle, and back when approaching a green", () => {
+  console.log("Green depth from 150 yards out");
+  for (const holeNumber of HOLE_NUMBERS) {
+    const readout = greenDistances(approachPoint(holeNumber, 150), greenPolygon(holeNumber));
+
+    assert.ok(
+      readout.frontYards < readout.middleYards,
+      `hole ${holeNumber}: front ${readout.frontYards.toFixed(1)} should be nearer than middle ${readout.middleYards.toFixed(1)}`,
+    );
+    assert.ok(
+      readout.middleYards < readout.backYards,
+      `hole ${holeNumber}: middle ${readout.middleYards.toFixed(1)} should be nearer than back ${readout.backYards.toFixed(1)}`,
+    );
+
+    // Real greens run roughly 15 to 40 yards front to back. A spread outside
+    // that says the ring is wrong, not that the green is unusual.
+    const depth = readout.backYards - readout.frontYards;
+    assert.ok(
+      depth >= 15 && depth <= 40,
+      `hole ${holeNumber} green measures ${depth.toFixed(1)} yards deep`,
+    );
+    console.log(
+      `  hole ${String(holeNumber).padStart(2)} · ${readout.frontYards.toFixed(0).padStart(3)} front · ` +
+        `${readout.middleYards.toFixed(0).padStart(3)} mid · ${readout.backYards.toFixed(0).padStart(3)} back · ` +
+        `${depth.toFixed(0).padStart(2)} yd deep`,
+    );
+  }
+});
+
+test("counts every number down as the player walks up the fairway", () => {
+  for (const holeNumber of HOLE_NUMBERS) {
+    const green = greenPolygon(holeNumber);
+    const far = greenDistances(approachPoint(holeNumber, 200), green);
+    const near = greenDistances(approachPoint(holeNumber, 100), green);
+
+    assert.ok(near.frontYards < far.frontYards, `hole ${holeNumber} front did not shrink`);
+    assert.ok(near.middleYards < far.middleYards, `hole ${holeNumber} middle did not shrink`);
+    assert.ok(near.backYards < far.backYards, `hole ${holeNumber} back did not shrink`);
+  }
+});
+
+test("swaps which edge is front when standing behind the green", () => {
+  for (const holeNumber of HOLE_NUMBERS) {
+    const green = greenPolygon(holeNumber);
+    const centre = greenCentre(green);
+    const inFront = approachPoint(holeNumber, 120);
+
+    // Mirror the approach point through the centre of the green to stand an
+    // equal distance beyond it.
+    const behind = {
+      lat: centre.lat + (centre.lat - inFront.lat),
+      lon: centre.lon + (centre.lon - inFront.lon),
+    };
+
+    const frontSide = greenDistances(inFront, green);
+    const backSide = greenDistances(behind, green);
+
+    // Both sides see a nearest and a farthest edge, and the middle stays put.
+    assert.ok(backSide.frontYards < backSide.middleYards, `hole ${holeNumber} behind: front not nearest`);
+    assert.ok(backSide.middleYards < backSide.backYards, `hole ${holeNumber} behind: back not farthest`);
+    assert.ok(
+      Math.abs(frontSide.middleYards - backSide.middleYards) < 1,
+      `hole ${holeNumber}: the middle of the green should not move`,
+    );
+  }
+});
+
+test("collapses to a plain distance for a single-point green", () => {
+  const from = { lat: 39.1384472, lon: -121.5419038 };
+  const point = { lat: 39.1369162, lon: -121.5456708 };
+  const readout = greenDistances(from, [point]);
+  const plain = distanceYards(from, point);
+
+  assert.ok(Math.abs(readout.frontYards - plain) < 1e-9);
+  assert.ok(Math.abs(readout.middleYards - plain) < 1e-9);
+  assert.ok(Math.abs(readout.backYards - plain) < 1e-9);
 });

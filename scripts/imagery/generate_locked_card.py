@@ -73,9 +73,10 @@ def load_pipeline(controlnet_model: str, cache_dir: Path):
     )
     pipeline.to("cuda")
     # 12 GB is enough for SDXL plus a ControlNet at this size only with the VAE
-    # working in slices; without this it peaks during decode.
-    pipeline.enable_vae_tiling()
-    pipeline.enable_vae_slicing()
+    # working in slices; without this it peaks during decode. Called on the VAE
+    # directly — the pipeline-level helpers are removed in diffusers 0.40.
+    pipeline.vae.enable_tiling()
+    pipeline.vae.enable_slicing()
     pipeline.set_progress_bar_config(disable=True)
     return pipeline
 

@@ -59,7 +59,7 @@ NEGATIVE_PROMPT = (
 )
 
 
-def load_pipeline(controlnet_model: str, cache_dir: Path):
+def load_pipeline(controlnet_model: str, cache_dir: Path, low_vram: bool = False):
     controlnet = ControlNetModel.from_pretrained(
         controlnet_model, torch_dtype=torch.float16, cache_dir=cache_dir
     )
@@ -71,7 +71,18 @@ def load_pipeline(controlnet_model: str, cache_dir: Path):
         use_safetensors=True,
         cache_dir=cache_dir,
     )
-    pipeline.to("cuda")
+    if low_vram:
+        # Resident SDXL + ControlNet at this size runs at the very edge of the
+        # 12 GB card, which is fine on an idle machine and pathological on a
+        # busy one: any other VRAM user tips the driver into system-memory
+        # fallback, and a 73-second card becomes a 30-minute stall
+        # (2026-07-27, twice). Offloading holds each submodel on the GPU only
+        # while it runs — a few times slower than resident weights, immune to
+        # sharing the card with a desktop session. Same seeds, same outputs:
+        # the math still happens on CUDA.
+        pipeline.enable_model_cpu_offload()
+    else:
+        pipeline.to("cuda")
     # 12 GB is enough for SDXL plus a ControlNet at this size only with the VAE
     # working in slices; without this it peaks during decode. Called on the VAE
     # directly — the pipeline-level helpers are removed in diffusers 0.40.
@@ -146,6 +157,14 @@ def main() -> None:
     )
     parser.add_argument("--controlnet", type=str, default=CONTROLNET_MODEL)
     parser.add_argument(
+        "--low-vram",
+        action="store_true",
+        help=(
+            "offload submodels to CPU between uses so the run coexists with "
+            "a busy desktop session instead of thrashing at the 12 GB edge"
+        ),
+    )
+    parser.add_argument(
         "--cache-dir",
         type=Path,
         default=Path("C:/Users/mc516/Documents/Aries Radar/peach-tree-imagery/hf-cache"),
@@ -159,7 +178,7 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
 
     print(f"Loading {args.controlnet} and SDXL into {args.cache_dir} ...")
-    pipeline = load_pipeline(args.controlnet, args.cache_dir)
+    pipeline = load_pipeline(args.controlnet, args.cache_dir, low_vram=args.low_vram)
 
     combinations = [
         (strength, scale) for scale in args.controlnet_scale for strength in args.strength
@@ -202,6 +221,7 @@ def main() -> None:
                     "prompt": PROMPT,
                     "negativePrompt": NEGATIVE_PROMPT,
                     "torch": torch.__version__,
+                    "lowVram": args.low_vram,
                     "secondsTaken": round(time.time() - started, 1),
                 },
                 indent=2,

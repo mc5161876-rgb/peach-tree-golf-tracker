@@ -258,13 +258,115 @@
     }
   },
   "illustrations": {
-    "source": "Built-in OpenAI image generation, one transformation per hole",
-    "style": "Cinematic 2.5D premium yardage-book environment",
+    "source": "Local geometry-locked repaint: SDXL base + xinsir/controlnet-tile-sdxl-1.0, img2img from each aerial card",
+    "style": "Golden-hour enhanced aerial; the aerial is both the starting image and the ControlNet conditioning signal",
+    "settings": {
+      "strength": 0.35,
+      "controlnetConditioningScale": 0.9,
+      "seed": 20260726,
+      "steps": 30,
+      "guidance": 5
+    },
+    "generatedAt": "2026-07-27",
     "referenceImagery": "Each matching 2022 USDA NAIP-derived aerial hole card",
     "referenceGeometry": "OpenStreetMap contributors",
     "authoritative": false,
+    "geometryLocked": true,
+    "driftToleranceYards": 5,
+    "drift": {
+      "1": {
+        "maxYards": 0.86,
+        "medianYards": 0.25,
+        "pass": true
+      },
+      "2": {
+        "maxYards": 0.78,
+        "medianYards": 0.35,
+        "pass": true
+      },
+      "3": {
+        "maxYards": 0.46,
+        "medianYards": 0.13,
+        "pass": true
+      },
+      "4": {
+        "maxYards": 0.48,
+        "medianYards": 0.18,
+        "pass": true
+      },
+      "5": {
+        "maxYards": 0.68,
+        "medianYards": 0.24,
+        "pass": true
+      },
+      "6": {
+        "maxYards": 0.71,
+        "medianYards": 0.22,
+        "pass": true
+      },
+      "7": {
+        "maxYards": 0.36,
+        "medianYards": 0.15,
+        "pass": true
+      },
+      "8": {
+        "maxYards": 0.71,
+        "medianYards": 0.23,
+        "pass": true
+      },
+      "9": {
+        "maxYards": 0.79,
+        "medianYards": 0.23,
+        "pass": true
+      },
+      "10": {
+        "maxYards": 0.42,
+        "medianYards": 0.18,
+        "pass": true
+      },
+      "11": {
+        "maxYards": 0.81,
+        "medianYards": 0.29,
+        "pass": true
+      },
+      "12": {
+        "maxYards": 0.51,
+        "medianYards": 0.24,
+        "pass": true
+      },
+      "13": {
+        "maxYards": 0.58,
+        "medianYards": 0.26,
+        "pass": true
+      },
+      "14": {
+        "maxYards": 0.39,
+        "medianYards": 0.15,
+        "pass": true
+      },
+      "15": {
+        "maxYards": 0.57,
+        "medianYards": 0.2,
+        "pass": true
+      },
+      "16": {
+        "maxYards": 0.76,
+        "medianYards": 0.24,
+        "pass": true
+      },
+      "17": {
+        "maxYards": 0.38,
+        "medianYards": 0.13,
+        "pass": true
+      },
+      "18": {
+        "maxYards": 0.94,
+        "medianYards": 0.2,
+        "pass": true
+      }
+    },
     "localRefinements": {
-      "4": "The dogleg left begins earlier than the July 2022 aerial suggests; exact current geometry remains unconfirmed.",
+      "4": "The dogleg left begins earlier than the July 2022 aerial suggests; exact current geometry remains unconfirmed. On the right side of the fairway there is a low mound roughly 4-6 feet tall - it is NOT a bunker; a previous freehand illustration invented one there and it must not return.",
       "6": "A large mature tree on the left side extends low branches and canopy across roughly half the fairway.",
       "7": "The pond has since been cleaned up and is represented as maintained open water with a neat shoreline."
     },

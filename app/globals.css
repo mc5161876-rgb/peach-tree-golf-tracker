@@ -2186,9 +2186,14 @@ p {
 
 .hole-guide-visual {
   position: relative;
-  width: 100%;
-  height: min(58dvh, 560px);
-  min-height: 430px;
+  /* The card is 900x1200. A box with the same 3:4 shape shows all of it —
+     object-fit: cover has nothing left to crop, so the green at the top of a
+     tall card can never fall out of frame again. Width takes whatever the
+     sheet offers unless the height budget (58dvh, capped) is the tighter
+     constraint, in which case the box narrows to keep the shape. */
+  aspect-ratio: 3 / 4;
+  width: min(100%, calc(min(58dvh, 560px) * 3 / 4));
+  margin-inline: auto;
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
   border-radius: 21px;

@@ -2201,7 +2201,16 @@ p {
   box-shadow: 0 18px 38px rgba(5, 22, 14, 0.22);
 }
 
-.hole-guide-visual > img {
+/* The zoomed layer: only the imagery lives inside, so scaling it never
+   changes the size of the band, pins, or crosshair drawn above it. */
+.hole-guide-zoom {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.hole-guide-zoom > img {
   object-fit: cover;
 }
 

@@ -2229,7 +2229,7 @@ p {
 
 .hole-guide-tools {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr;
   gap: 6px;
   align-items: stretch;
   margin: -4px 0 10px;
@@ -2239,37 +2239,6 @@ p {
   margin: 0;
 }
 
-.hole-guide-measure {
-  display: flex;
-  min-height: 48px;
-  min-width: 96px;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 14px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  color: var(--muted);
-  background: var(--soft);
-  cursor: pointer;
-}
-
-.hole-guide-measure span {
-  font-size: 11px;
-  font-weight: 850;
-}
-
-.hole-guide-measure small {
-  font-size: 9px;
-  letter-spacing: 0.04em;
-}
-
-.hole-guide-measure.selected {
-  border-color: transparent;
-  color: #fffdf4;
-  background: var(--accent);
-}
-
 .hole-guide-visual.measuring {
   cursor: crosshair;
   /* The card is a drag surface while measuring — let the browser scroll the
@@ -2277,18 +2246,18 @@ p {
   touch-action: none;
 }
 
-/* AC-3 — an open ring with a gap at the centre, so the point being measured
-   stays readable under a fingertip instead of hiding beneath it. */
+/* AC-7 — an open 40px ring with a gap at the centre, so the point being
+   measured stays readable under a fingertip instead of hiding beneath it. */
 .measure-crosshair {
   position: absolute;
-  width: 68px;
-  height: 68px;
-  margin: -34px 0 0 -34px;
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
   border: 2px solid rgba(255, 253, 244, 0.95);
   border-radius: 50%;
   background:
-    linear-gradient(rgba(255, 253, 244, 0.95), rgba(255, 253, 244, 0.95)) center/2px 22px no-repeat,
-    linear-gradient(rgba(255, 253, 244, 0.95), rgba(255, 253, 244, 0.95)) center/22px 2px no-repeat;
+    linear-gradient(rgba(255, 253, 244, 0.95), rgba(255, 253, 244, 0.95)) center/2px 13px no-repeat,
+    linear-gradient(rgba(255, 253, 244, 0.95), rgba(255, 253, 244, 0.95)) center/13px 2px no-repeat;
   box-shadow: 0 0 0 2px rgba(4, 22, 14, 0.5), 0 6px 18px rgba(0, 0, 0, 0.35);
   pointer-events: none;
 }
@@ -2296,9 +2265,61 @@ p {
 .measure-crosshair::after {
   content: "";
   position: absolute;
-  inset: 28px;
+  inset: 16px;
   border-radius: 50%;
   background: rgba(255, 253, 244, 0.95);
+}
+
+/* AC-2 — front / middle / back ride in a band across the top of the card. */
+.yardage-band {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 14px;
+  background: rgba(5, 28, 18, 0.72);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(9px);
+}
+
+.yardage-band > span {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 4px;
+  border-radius: 9px;
+}
+
+.yardage-band > span.middle {
+  background: rgba(255, 253, 244, 0.14);
+}
+
+.yardage-band small {
+  color: rgba(255, 253, 244, 0.72);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.yardage-band strong {
+  color: #fffdf4;
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1.05;
+}
+
+/* The band owns the top edge, so the green pill steps down beneath it. */
+.hole-guide-visual.measuring .hole-guide-marker.green {
+  top: 72px;
 }
 
 .measure-you {
@@ -2313,22 +2334,6 @@ p {
   pointer-events: none;
 }
 
-.measure-hint {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  padding: 8px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 999px;
-  color: #fffdf4;
-  background: rgba(5, 28, 18, 0.82);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  pointer-events: none;
-}
-
 .measure-panel {
   margin-top: 12px;
   padding: 12px;
@@ -2337,44 +2342,8 @@ p {
   background: var(--surface);
 }
 
-.measure-figures {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.measure-figures > span {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  border-radius: 11px;
-  background: var(--soft);
-}
-
-.measure-figures small {
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.measure-figures strong {
-  font-size: 24px;
-  font-weight: 850;
-  line-height: 1.1;
-}
-
-.measure-figures em {
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 700;
-  color: var(--muted);
-}
-
 .measure-reference {
-  margin: 10px 0 0;
+  margin: 0;
   font-size: 11px;
   font-weight: 800;
   color: var(--muted);
@@ -2389,19 +2358,6 @@ p {
   font-size: 10px;
   line-height: 1.45;
   color: var(--muted);
-}
-
-/* AC-1 — Measure stays beside the toggle at phone width rather than stacking
-   below it. Three controls still clear 44px of touch target at 390px. */
-@media (max-width: 459px) {
-  .hole-guide-tools {
-    gap: 4px;
-  }
-
-  .hole-guide-measure {
-    min-width: 82px;
-    padding: 4px 8px;
-  }
 }
 
 .hole-guide-primary-facts {

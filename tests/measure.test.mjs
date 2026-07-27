@@ -10,7 +10,7 @@ import {
   measureCrosshair,
   measureOrigin,
 } from "../app/data/measure.ts";
-import { latLonToCardPoint } from "../app/data/course-geometry.ts";
+import { greenCentre, latLonToCardPoint } from "../app/data/course-geometry.ts";
 import { HOME_COURSE } from "../app/data/mock-course.ts";
 
 // Read the atlas the same way the app's accessor does. Importing JSON through
@@ -30,10 +30,14 @@ const centerline = (holeNumber) =>
   sources.centerlines.holes[String(holeNumber)].map(([lat, lon]) => ({ lat, lon }));
 const holeTee = (holeNumber) => centerline(holeNumber)[0];
 const holeGreen = (holeNumber) => centerline(holeNumber).at(-1);
+const holeGreenPolygon = (holeNumber) =>
+  sources.greens.holes[String(holeNumber)].points.map(([lat, lon]) => ({ lat, lon }));
 
 const HOLE = 1;
 const tee = holeTee(HOLE);
 const green = holeGreen(HOLE);
+const greenRing = holeGreenPolygon(HOLE);
+const pin = greenCentre(greenRing);
 const geometry = holeCardGeometry(HOLE);
 
 /** Somewhere on the property — midway down the first fairway. */
@@ -63,45 +67,77 @@ test("falls back to the tee whenever there is no trustworthy position", () => {
   assert.deepEqual(measureOrigin(offCourse, tee, COURSE_BOUNDS), { point: tee, reference: "tee" });
 });
 
-test("reports carry from the right reference point in each case", () => {
-  const crosshair = green;
-
-  const located = measureCrosshair({ crosshair, tee, green, position: onCourse, bounds: COURSE_BOUNDS });
-  const denied = measureCrosshair({ crosshair, tee, green, position: null, bounds: COURSE_BOUNDS });
-  const stray = measureCrosshair({ crosshair, tee, green, position: offCourse, bounds: COURSE_BOUNDS });
+test("measures all three numbers from the right reference point in each case", () => {
+  const located = measureCrosshair({ crosshair: pin, tee, green: greenRing, position: onCourse, bounds: COURSE_BOUNDS });
+  const denied = measureCrosshair({ crosshair: pin, tee, green: greenRing, position: null, bounds: COURSE_BOUNDS });
+  const stray = measureCrosshair({ crosshair: pin, tee, green: greenRing, position: offCourse, bounds: COURSE_BOUNDS });
 
   assert.equal(located.reference, "position");
   assert.equal(denied.reference, "tee");
   assert.equal(stray.reference, "tee");
 
-  // Standing halfway down the hole must read as a shorter carry than standing
-  // on the tee — otherwise the reference point is not being applied.
-  assert.ok(
-    located.carryYards < denied.carryYards,
-    `carry from mid-fairway (${located.carryYards}) should be shorter than from the tee (${denied.carryYards})`,
-  );
+  // AC-3 — standing halfway down the hole must read shorter than standing on
+  // the tee, on every number — otherwise the reference point is not applied.
+  for (const key of ["frontYards", "middleYards", "backYards"]) {
+    assert.ok(
+      located[key] < denied[key],
+      `${key} from mid-fairway (${located[key]}) should be shorter than from the tee (${denied[key]})`,
+    );
+  }
 
   // An out-of-bounds fix must produce exactly the tee answer, not a third one.
-  assert.equal(stray.carryYards, denied.carryYards);
+  assert.deepEqual(stray, denied);
 
-  // Crosshair sitting on the green reads zero to the green in every case.
-  for (const result of [located, denied, stray]) assert.equal(result.toGreenYards, 0);
+  // AC-4 — the tee fallback is numbers, never blanks.
+  for (const result of [located, denied, stray]) {
+    for (const key of ["frontYards", "middleYards", "backYards"]) {
+      assert.equal(Number.isFinite(result[key]), true);
+    }
+    // Approaching from up the hole, the near edge is nearer than the far edge.
+    assert.ok(result.frontYards < result.backYards);
+  }
 });
 
-test("carry from the tee to the green matches the scorecard", () => {
+test("dragging the crosshair moves only the middle number", () => {
+  const atPin = measureCrosshair({ crosshair: pin, tee, green: greenRing, position: null, bounds: COURSE_BOUNDS });
+  // AC-6 — a pin dragged 50 yards back up the fairway shrinks the middle;
+  // front and back stay locked to the real green edges.
+  const draggedShort = { lat: pin.lat + (tee.lat - pin.lat) * 0.15, lon: pin.lon + (tee.lon - pin.lon) * 0.15 };
+  const dragged = measureCrosshair({ crosshair: draggedShort, tee, green: greenRing, position: null, bounds: COURSE_BOUNDS });
+
+  assert.ok(dragged.middleYards < atPin.middleYards, "middle should follow the crosshair");
+  assert.equal(dragged.frontYards, atPin.frontYards);
+  assert.equal(dragged.backYards, atPin.backYards);
+});
+
+test("middle from the tee with the pin on the green matches the scorecard", () => {
   const scorecard = HOME_COURSE.holes.find((hole) => hole.number === HOLE).yardages.black;
-  const { carryYards, reference } = measureCrosshair({
-    crosshair: green,
+  const { middleYards, reference } = measureCrosshair({
+    crosshair: pin,
     tee,
-    green,
+    green: greenRing,
     position: null,
     bounds: COURSE_BOUNDS,
   });
 
   assert.equal(reference, "tee");
   // Same ±15% calibration gate MAR-22 holds the centerlines to.
-  const drift = Math.abs(carryYards - scorecard) / scorecard;
-  assert.ok(drift < 0.15, `tee-to-green measured ${carryYards} against a carded ${scorecard}`);
+  const drift = Math.abs(middleYards - scorecard) / scorecard;
+  assert.ok(drift < 0.15, `tee-to-pin measured ${middleYards} against a carded ${scorecard}`);
+});
+
+test("the default pin — the green centre — lands on every hole's card", () => {
+  // AC-5 — the crosshair starts on the green, so its default position must
+  // project inside the card for all 18 holes or it would spawn off-screen.
+  for (let holeNumber = 1; holeNumber <= 18; holeNumber += 1) {
+    const holeGeo = holeCardGeometry(holeNumber);
+    const centre = greenCentre(holeGreenPolygon(holeNumber));
+    const onCard = latLonToCardPoint(centre, holeGeo);
+    assert.ok(
+      onCard.x >= 0 && onCard.x <= CARD_SIZE.width && onCard.y >= 0 && onCard.y <= CARD_SIZE.height,
+      `hole ${holeNumber} default pin fell outside the card at ${onCard.x.toFixed(1)}, ${onCard.y.toFixed(1)}`,
+    );
+  }
 });
 
 test("maps pointer positions through the cover crop, not a flat percentage", () => {

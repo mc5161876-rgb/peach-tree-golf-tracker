@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { CLUB_IDENTITY, HOME_COURSE, NEGATIVE_TAGS, POSITIVE_TAGS, TEE_OPTIONS, teeLabel, type Tee } from "./data/mock-course";
 import { MOCK_ROUNDS, type MockRound } from "./data/mock-history";
-import { CARD_SIZE, COURSE_BOUNDS, holeCardGeometry, holeGreenPolygon, holeTee } from "./data/course-atlas";
+import { CARD_SIZE, COURSE_BOUNDS, holeCardGeometry, holeGreenPolygon, holeIllustrationLocked, holeTee } from "./data/course-atlas";
 import { cardPointToCover, coverPointToCard, isWithinCourse, measureCrosshair } from "./data/measure";
 import { cardPointToLatLon, greenCentre, latLonToCardPoint, type CardPoint, type LatLon } from "./data/course-geometry";
 import { IDENTITY_VIEW, contentToScreen, panBy, screenToContent, zoomAt, type ViewTransform } from "./data/viewport";
@@ -325,12 +325,18 @@ export default function GolfTracker() {
 
   const hole = HOME_COURSE.holes[currentHole - 1] ?? HOME_COURSE.holes[0];
   const showingIllustration = holeVisualMode === "illustrated" && Boolean(hole.visual.illustratedSrc);
+  // MAR-36 — the per-hole gate. A geometry-locked illustration that passed the
+  // 5-yard bar is a measuring surface, identical to the aerial; anything else
+  // stays browse-only and the aerial keeps the yardage work.
+  const illustrationLocked = holeIllustrationLocked(currentHole);
+  const browseOnlyView = showingIllustration && !illustrationLocked;
   const activeHoleVisual = showingIllustration
     ? { src: hole.visual.illustratedSrc!, alt: hole.visual.illustratedAlt! }
     : { src: hole.visual.src, alt: hole.visual.alt };
+  const illustrationLabel = illustrationLocked ? "Geometry-locked illustration" : "AI illustrated concept";
   const holeAtlasLabel = hole.localNote
-    ? showingIllustration ? "AI illustrated · local update" : "Local layout update"
-    : showingIllustration ? "AI illustrated concept" : HOME_COURSE.guideLabel;
+    ? showingIllustration ? `${illustrationLabel} · local update` : "Local layout update"
+    : showingIllustration ? illustrationLabel : HOME_COURSE.guideLabel;
   const currentEntry = entries[currentHole] ?? { tags: [], note: "" };
   const displayedScore = currentEntry.score ?? hole.par;
 
@@ -446,11 +452,12 @@ export default function GolfTracker() {
             ? "Measuring from the tee — looking for your location"
             : "Measuring from the tee — location unavailable";
 
-  // AC-1 / AC-8 — yardages are not a mode. The guide opens measuring, on the
-  // aerial: the illustrated card is an AI re-render whose geometry drifted, so
-  // the crosshair and band live on the survey-accurate view only.
+  // Yardages are not a mode: the guide opens measuring. Since MAR-36 it opens
+  // on the geometry-locked illustration when this hole has one — accurate to
+  // under a yard, so it carries the band and pin — and falls back to the
+  // aerial for any hole whose art never passed the bar.
   const openHoleGuide = () => {
-    setHoleVisualMode("aerial");
+    setHoleVisualMode(holeIllustrationLocked(currentHole) ? "illustrated" : "aerial");
     setFix(null);
     setShowHoleGuide(true);
   };
@@ -555,7 +562,7 @@ export default function GolfTracker() {
   // behind the card from scrolling while zooming.
   useEffect(() => {
     const element = holeVisualRef.current;
-    if (!element || !showHoleGuide || showingIllustration) return;
+    if (!element || !showHoleGuide || browseOnlyView) return;
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
       const box = element.getBoundingClientRect();
@@ -577,7 +584,7 @@ export default function GolfTracker() {
     };
     element.addEventListener("wheel", onWheel, { passive: false });
     return () => element.removeEventListener("wheel", onWheel);
-  }, [showHoleGuide, showingIllustration, currentHole, roundPhase]);
+  }, [showHoleGuide, browseOnlyView, currentHole, roundPhase]);
   const currentIndex = scheduledHoles.findIndex((item) => item.number === currentHole);
 
   useEffect(() => {
@@ -1151,32 +1158,32 @@ export default function GolfTracker() {
                   <div className="hole-guide-mode" role="group" aria-label="Hole image style">
                     {/* The AI card never carries the crosshair or the band —
                         its geometry drifted, so numbers live on the aerial. */}
-                    <button type="button" className={holeVisualMode === "illustrated" ? "selected" : ""} aria-pressed={holeVisualMode === "illustrated"} onClick={() => setHoleVisualMode("illustrated")}><span>Illustrated</span><small>AI concept</small></button>
+                    <button type="button" className={holeVisualMode === "illustrated" ? "selected" : ""} aria-pressed={holeVisualMode === "illustrated"} onClick={() => setHoleVisualMode("illustrated")}><span>Illustrated</span><small>{illustrationLocked ? "Geometry-locked" : "AI concept"}</small></button>
                     <button type="button" className={holeVisualMode === "aerial" ? "selected" : ""} aria-pressed={holeVisualMode === "aerial"} onClick={() => setHoleVisualMode("aerial")}><span>Aerial</span><small>2022 source</small></button>
                   </div>
                 </div>
               )}
               <div
                 ref={holeVisualRef}
-                className={`hole-guide-visual${showingIllustration ? "" : " measuring"}`}
-                onPointerDown={showingIllustration ? undefined : cardPointerDown}
-                onPointerMove={showingIllustration ? undefined : cardPointerMove}
-                onPointerUp={showingIllustration ? undefined : cardPointerUp}
-                onPointerCancel={showingIllustration ? undefined : cardPointerUp}
+                className={`hole-guide-visual${browseOnlyView ? "" : " measuring"}`}
+                onPointerDown={browseOnlyView ? undefined : cardPointerDown}
+                onPointerMove={browseOnlyView ? undefined : cardPointerMove}
+                onPointerUp={browseOnlyView ? undefined : cardPointerUp}
+                onPointerCancel={browseOnlyView ? undefined : cardPointerUp}
               >
                 {/* Only the imagery scales; every overlay stays its own size
                     and is repositioned through the view instead. */}
                 <div
                   className="hole-guide-zoom"
-                  style={showingIllustration ? undefined : { transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.z})` }}
+                  style={browseOnlyView ? undefined : { transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.z})` }}
                 >
                   <Image src={activeHoleVisual.src} alt={activeHoleVisual.alt} fill sizes="(max-width: 560px) 100vw, 560px" unoptimized />
                 </div>
                 <span className="hole-guide-vignette" aria-hidden="true" />
-                {!showingIllustration && (
-                  /* AC-2 — the three numbers ride in a band across the top of
-                     the card. On a phone the green is ~26px wide, so pucks
-                     around it cannot fit; a band always can. */
+                {!browseOnlyView && (
+                  /* The three numbers ride in a band across the top of the
+                     card. On a phone the green is ~26px wide, so pucks around
+                     it cannot fit; a band always can. */
                   <div className="yardage-band" role="group" aria-label="Green yardages">
                     <span><small>Front</small><strong>{readout.frontYards}</strong></span>
                     <span className="middle"><small>Middle · pin</small><strong>{readout.middleYards}</strong></span>
@@ -1187,14 +1194,14 @@ export default function GolfTracker() {
                     zoomed — hide them rather than mislabel whatever is there. */}
                 {view.z <= 1.001 && <span className="hole-guide-marker green">Green</span>}
                 {view.z <= 1.001 && <span className="hole-guide-marker tee">Tee</span>}
-                {!showingIllustration && positionAt && positionOnCard && (
+                {!browseOnlyView && positionAt && positionOnCard && (
                   <span className="measure-you" style={{ left: `${positionAt.x}px`, top: `${positionAt.y}px` }} aria-hidden="true" />
                 )}
-                {!showingIllustration && crosshairAt && (
+                {!browseOnlyView && crosshairAt && (
                   <span className="measure-crosshair" style={{ left: `${crosshairAt.x}px`, top: `${crosshairAt.y}px` }} aria-hidden="true" />
                 )}
               </div>
-              {!showingIllustration && (
+              {!browseOnlyView && (
                 <div className="measure-panel" role="group" aria-label="Yardage details">
                   {/* AC-4 — which point produced the numbers is never left to inference. */}
                   <p className={`measure-reference${locationState === "located" ? " live" : ""}`}>{measureReferenceLine}</p>
@@ -1213,8 +1220,12 @@ export default function GolfTracker() {
               </div>
               {hole.localNote && <div className="hole-local-note"><span>Local course update</span><b>Hole {hole.number} has changed since this aerial.</b><p>{hole.localNote}</p></div>}
               <div className="hole-guide-note">
-                <b>{showingIllustration ? "A premium concept grounded in the real hole." : "Read the real shape before you play."}</b>
-                <p>{showingIllustration ? "This AI interpretation uses the aerial as its layout reference, then adds modeled trees, terrain, fairway cuts, and cinematic light. Compare it with the source before treating any detail as exact." : "This aerial preserves the course corridor, tree lines, bunker positions, and surrounding hazards. Use it as a visual planning aid—not as live GPS or a pin sheet."}</p>
+                <b>{showingIllustration ? (illustrationLocked ? "Repainted from the real aerial — geometry locked." : "A premium concept grounded in the real hole.") : "Read the real shape before you play."}</b>
+                <p>{showingIllustration
+                  ? illustrationLocked
+                    ? "This view is a repaint of the 2022 aerial: fairway edges, bunkers, and trees are held within a yard of the photo, so yardages read the same here as on the Aerial view. Light and colour are enhanced; the ground is real."
+                    : "This AI interpretation uses the aerial as its layout reference, then adds modeled trees, terrain, fairway cuts, and cinematic light. Compare it with the source before treating any detail as exact."
+                  : "This aerial preserves the course corridor, tree lines, bunker positions, and surrounding hazards. Use it as a visual planning aid—not as live GPS or a pin sheet."}</p>
               </div>
               <p className="hole-guide-credit">{HOME_COURSE.scorecardNote}<br />{HOME_COURSE.guideCredit}</p>
               <button type="button" className="primary-action" onClick={() => setShowHoleGuide(false)}>Back to scoring</button>

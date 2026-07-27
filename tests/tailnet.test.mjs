@@ -7,11 +7,30 @@ import test from "node:test";
 import {
   assetUrlsFrom,
   certDomainFrom,
+  isHtmlNavigation,
   isServerStale,
   isTailscaleRunning,
   newestFileTime,
   serveTargetsPort,
 } from "../scripts/lib/tailnet.mjs";
+
+test("intercepts navigations for the stale guard, never asset requests", () => {
+  // The root is a navigation no matter what the client claims to accept —
+  // the shortcut opens exactly this URL.
+  assert.equal(isHtmlNavigation("/", undefined), true);
+  assert.equal(isHtmlNavigation("/", "*/*"), true);
+
+  // Assets must always pass through, or the guard page itself could break
+  // other resources; anything with a file extension is never intercepted.
+  assert.equal(isHtmlNavigation("/assets/index-BsKdPn4A.css", "text/html,*/*"), false);
+  assert.equal(isHtmlNavigation("/course/peach-tree/hole-02.webp", "image/webp"), false);
+  assert.equal(isHtmlNavigation("/favicon.ico", "*/*"), false);
+
+  // Extensionless paths are navigations exactly when the browser asks for HTML.
+  assert.equal(isHtmlNavigation("/history", "text/html,application/xhtml+xml"), true);
+  assert.equal(isHtmlNavigation("/history", "application/json"), false);
+  assert.equal(isHtmlNavigation("/history", undefined), false);
+});
 
 test("refuses a server that started before the newest build", () => {
   const started = Date.parse("2026-07-26T08:00:00Z");

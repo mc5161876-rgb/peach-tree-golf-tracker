@@ -57,6 +57,22 @@ export function isServerStale({ serverStartedAt, newestBuildAt, graceMs = 4000 }
 }
 
 /**
+ * Is this request a person navigating to a page, rather than a page pulling
+ * in one of its assets?
+ *
+ * The stale-build guard must intercept navigations — that is where a human
+ * can be told to relaunch — while letting asset requests through untouched,
+ * or the guard page itself could never load. "/" is always a navigation; a
+ * path with a file extension never is; anything else counts only when the
+ * browser says it wants HTML.
+ */
+export function isHtmlNavigation(pathname, acceptHeader) {
+  if (pathname === "/") return true;
+  if (path.posix.extname(pathname) !== "") return false;
+  return typeof acceptHeader === "string" && acceptHeader.includes("text/html");
+}
+
+/**
  * The HTTPS name Tailscale will answer on, from `tailscale status --json`.
  *
  * Prefers CertDomains, since a name without a certificate cannot serve HTTPS

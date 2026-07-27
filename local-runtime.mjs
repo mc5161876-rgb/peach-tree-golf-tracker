@@ -4,9 +4,11 @@ import http from "node:http";
 import path from "node:path";
 import { pipeline } from "node:stream";
 import { startProdServer } from "./node_modules/vinext/dist/server/prod-server.js";
+import { isHtmlNavigation, isServerStale, newestFileTime } from "./scripts/lib/tailnet.mjs";
 
 const root = process.cwd();
 const clientDir = path.resolve(root, "dist", "client");
+const distDir = path.resolve(root, "dist");
 const publicPort = Number.parseInt(process.env.PORT || "3000", 10);
 const backendPort = Number.parseInt(process.env.BACKEND_PORT || String(publicPort + 1), 10);
 const host = process.env.HOST || "127.0.0.1";
@@ -104,6 +106,38 @@ if (!fs.existsSync(clientDir)) {
   throw new Error(`Roundwell production client build is missing: ${clientDir}`);
 }
 
+// The stale-build guard. This process imports the compiled server once at
+// boot and serves dist/client from disk; rebuild underneath it and the
+// in-memory SSR keeps emitting HTML that points at hashed filenames which no
+// longer exist — the page arrives unstyled, or silently shows the old build.
+// A server started before the newest build artifact cannot be serving it
+// (2026-07-27: this exact trap shipped Mario an unstyled app). The walk over
+// dist is throttled so the check costs nothing per ordinary request.
+const serverStartedAt = Date.now();
+let staleCheckedAt = 0;
+let staleCached = false;
+async function rebuiltUnderneath() {
+  const now = Date.now();
+  if (now - staleCheckedAt > 5000) {
+    staleCached = isServerStale({
+      serverStartedAt,
+      newestBuildAt: await newestFileTime(distDir),
+    });
+    staleCheckedAt = now;
+    if (staleCached) console.error("[roundwell-runtime] dist was rebuilt after this server started — refusing to serve the mismatch");
+  }
+  return staleCached;
+}
+
+const STALE_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relaunch Peach Tree</title>
+<style>body{margin:0;display:grid;place-items:center;min-height:100dvh;background:#0a251a;color:#fffdf4;font-family:system-ui,sans-serif}main{max-width:26rem;padding:2rem;text-align:center}h1{font-size:1.4rem}p{line-height:1.5;color:#d8d4c4}</style>
+</head><body><main><h1>The app was rebuilt while this server was running</h1>
+<p>This window would show a broken mix of old and new files, so it stopped instead.</p>
+<p><b>Close this tab and open the app again</b> with the <i>OPEN Peach Tree Golf Score Tracker</i> shortcut — the fresh launch picks up the new build.</p>
+</main></body></html>`;
+
 const backend = await startProdServer({
   port: backendPort,
   host: "127.0.0.1",
@@ -115,6 +149,11 @@ const front = http.createServer(async (req, res) => {
   const rawUrl = req.url || "/";
   const pathname = rawUrl.split("?")[0];
   try {
+    if (isHtmlNavigation(pathname, req.headers.accept) && (await rebuiltUnderneath())) {
+      res.writeHead(503, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(STALE_PAGE);
+      return;
+    }
     if (await serveClientFile(req, res, pathname)) return;
     proxyToBackend(req, res);
   } catch (error) {

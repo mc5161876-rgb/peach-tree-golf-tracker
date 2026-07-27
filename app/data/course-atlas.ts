@@ -69,6 +69,23 @@ export function holeGreenPolygon(holeNumber: number): GreenPolygon {
 }
 
 /**
+ * May yardages be read off this hole's illustrated card?
+ *
+ * True only when the shipped illustration is a geometry-locked repaint AND
+ * this hole's measured drift passed the 5-yard bar recorded by the generator.
+ * Freehand art, a missing measurement, or a failed hole all answer no — the
+ * guide then keeps the aerial as the measuring surface for that hole.
+ */
+export function holeIllustrationLocked(holeNumber: number): boolean {
+  const info = sources.illustrations as {
+    geometryLocked?: boolean;
+    drift?: Record<string, { pass?: boolean }>;
+  };
+  if (!info.geometryLocked) return false;
+  return Boolean(info.drift?.[holeKey(holeNumber)]?.pass);
+}
+
+/**
  * How far the matched green's middle sits from where the centerline ended.
  *
  * Written by the generator as the evidence the pairing is right. Exposed so a

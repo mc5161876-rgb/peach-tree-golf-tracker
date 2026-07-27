@@ -10,7 +10,7 @@
     "build": "vinext build",
     "start": "vinext start",
     "serve:tailnet": "node scripts/serve-tailnet.mjs",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/course-geometry.test.mjs tests/measure.test.mjs tests/viewport.test.mjs tests/tailnet.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/course-geometry.test.mjs tests/measure.test.mjs tests/viewport.test.mjs tests/illustration-gate.test.mjs tests/tailnet.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {

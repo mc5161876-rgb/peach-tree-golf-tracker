@@ -10,19 +10,21 @@
 
 // Explicit extension so the Node test runner resolves this without a loader;
 // the bundler is happy either way.
-import { cardPointToLatLon, distanceYards } from "./course-geometry.ts";
-import type { CardGeometry, CardPoint, LatLon } from "./course-geometry";
+import { cardPointToLatLon, distanceYards, greenDistances } from "./course-geometry.ts";
+import type { CardGeometry, CardPoint, GreenPolygon, LatLon } from "./course-geometry";
 import type { CourseBounds } from "./course-atlas";
 
-/** What the carry was measured from. */
+/** What the yardages were measured from. */
 export type MeasureReference = "position" | "tee";
 
 export type MeasureReadout = {
   reference: MeasureReference;
-  /** Reference point to crosshair, whole yards. */
-  carryYards: number;
-  /** Crosshair to the middle of the green, whole yards. */
-  toGreenYards: number;
+  /** Reference point to the nearest edge of the green, whole yards. */
+  frontYards: number;
+  /** Reference point to the crosshair — the pin, wherever it was dragged. */
+  middleYards: number;
+  /** Reference point to the farthest edge of the green, whole yards. */
+  backYards: number;
 };
 
 export type Size = { width: number; height: number };
@@ -61,18 +63,27 @@ export function measureOrigin(
   return { point: tee, reference: "tee" };
 }
 
+/**
+ * The three numbers in the yardage band.
+ *
+ * Front and back are locked to the mapped edges of the putting surface; only
+ * the middle follows the crosshair, so dragging the pin around never moves
+ * the edges it sits between.
+ */
 export function measureCrosshair(options: {
   crosshair: LatLon;
   tee: LatLon;
-  green: LatLon;
+  green: GreenPolygon;
   position: LatLon | null;
   bounds: CourseBounds;
 }): MeasureReadout {
   const { point, reference } = measureOrigin(options.position, options.tee, options.bounds);
+  const edges = greenDistances(point, options.green);
   return {
     reference,
-    carryYards: Math.round(distanceYards(point, options.crosshair)),
-    toGreenYards: Math.round(distanceYards(options.crosshair, options.green)),
+    frontYards: Math.round(edges.frontYards),
+    middleYards: Math.round(distanceYards(point, options.crosshair)),
+    backYards: Math.round(edges.backYards),
   };
 }
 

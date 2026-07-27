@@ -7,6 +7,7 @@ import { MOCK_ROUNDS, type MockRound } from "./data/mock-history";
 import { CARD_SIZE, COURSE_BOUNDS, holeCardGeometry, holeGreenPolygon, holeTee } from "./data/course-atlas";
 import { cardPointToCover, coverPointToCard, isWithinCourse, measureCrosshair } from "./data/measure";
 import { cardPointToLatLon, greenCentre, latLonToCardPoint, type CardPoint, type LatLon } from "./data/course-geometry";
+import { IDENTITY_VIEW, contentToScreen, panBy, screenToContent, zoomAt, type ViewTransform } from "./data/viewport";
 
 type Theme = "club" | "sport" | "clean";
 type ScoreMethod = "stepper" | "numbers" | "relative";
@@ -208,6 +209,9 @@ export default function GolfTracker() {
   // the point Mario chose. Scoped to a hole in a phase (AC-9): anywhere else it
   // simply stops applying and the pin falls back to the green centre.
   const [crosshairPin, setCrosshairPin] = useState<{ hole: number; phase: RoundPhase; point: CardPoint } | null>(null);
+  // The pinch-zoom viewport, scoped exactly like the pin (AC-7): any other
+  // hole or phase falls back to identity, and it is never persisted.
+  const [cardView, setCardView] = useState<{ hole: number; phase: RoundPhase; view: ViewTransform } | null>(null);
   const [fix, setFix] = useState<GeolocationFix>(null);
   const celebrationIdRef = useRef(0);
   const celebrationTimerRef = useRef<number | null>(null);
@@ -346,6 +350,10 @@ export default function GolfTracker() {
     crosshairPin && crosshairPin.hole === currentHole && crosshairPin.phase === roundPhase
       ? crosshairPin.point
       : defaultPin;
+  const view =
+    cardView && cardView.hole === currentHole && cardView.phase === roundPhase
+      ? cardView.view
+      : IDENTITY_VIEW;
 
   // Geolocation needs a secure context. On localhost it works; over a plain LAN
   // address on a phone the API is simply absent — MAR-18's job to fix, not
@@ -405,9 +413,16 @@ export default function GolfTracker() {
     bounds: COURSE_BOUNDS,
   });
 
-  const crosshairAt = visualBox ? cardPointToCover(crosshair, visualBox, CARD_SIZE) : null;
+  // Overlays live outside the zoomed layer so the pin ring and the dot keep
+  // their size at every zoom (AC-6); their positions go through the view.
+  const crosshairAt = visualBox
+    ? contentToScreen(cardPointToCover(crosshair, visualBox, CARD_SIZE), view)
+    : null;
   const positionAt = usablePosition && visualBox
-    ? cardPointToCover(latLonToCardPoint(usablePosition, holeGeometry), visualBox, CARD_SIZE)
+    ? contentToScreen(
+        cardPointToCover(latLonToCardPoint(usablePosition, holeGeometry), visualBox, CARD_SIZE),
+        view,
+      )
     : null;
   const positionOnCard = Boolean(
     positionAt && visualBox &&
@@ -444,16 +459,125 @@ export default function GolfTracker() {
     const box = holeVisualRef.current?.getBoundingClientRect();
     if (!box) return;
     const container = { width: box.width, height: box.height };
+    // Screen → resting box pixels (undo the zoom) → card pixels. Clamped in
+    // content space so a finger at the box edge pins the visible card edge.
+    const content = screenToContent(
+      { x: event.clientX - box.left, y: event.clientY - box.top },
+      view,
+    );
     const point = coverPointToCard(
       {
-        x: Math.min(Math.max(event.clientX - box.left, 0), box.width),
-        y: Math.min(Math.max(event.clientY - box.top, 0), box.height),
+        x: Math.min(Math.max(content.x, 0), box.width),
+        y: Math.min(Math.max(content.y, 0), box.height),
       },
       container,
       CARD_SIZE,
     );
     setCrosshairPin({ hole: currentHole, phase: roundPhase, point });
   };
+
+  // Gesture bookkeeping for pinch-zoom. One finger drags the pin; the moment a
+  // second joins, the gesture is a pinch: the pin snaps back to where it was
+  // before the first finger touched (AC-2) and stays untouchable until every
+  // finger lifts.
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinBeforeGestureRef = useRef<typeof crosshairPin>(null);
+  const pinchRef = useRef<{ distance: number; mid: { x: number; y: number } } | null>(null);
+  const suppressPinRef = useRef(false);
+
+  const localPoint = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    return {
+      point: { x: event.clientX - box.left, y: event.clientY - box.top },
+      box: { width: box.width, height: box.height },
+    };
+  };
+
+  const cardPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const { point } = localPoint(event);
+    pointersRef.current.set(event.pointerId, point);
+
+    if (pointersRef.current.size === 1) {
+      pinBeforeGestureRef.current = crosshairPin;
+      suppressPinRef.current = false;
+      placeCrosshair(event);
+    } else if (pointersRef.current.size === 2) {
+      suppressPinRef.current = true;
+      setCrosshairPin(pinBeforeGestureRef.current);
+      const [first, second] = [...pointersRef.current.values()];
+      pinchRef.current = {
+        distance: Math.hypot(second.x - first.x, second.y - first.y),
+        mid: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 },
+      };
+    }
+  };
+
+  const cardPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!pointersRef.current.has(event.pointerId)) return;
+    const { point, box } = localPoint(event);
+    pointersRef.current.set(event.pointerId, point);
+
+    if (pointersRef.current.size >= 2 && pinchRef.current) {
+      const [first, second] = [...pointersRef.current.values()];
+      const distance = Math.hypot(second.x - first.x, second.y - first.y);
+      const mid = { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+      const factor = pinchRef.current.distance > 0 ? distance / pinchRef.current.distance : 1;
+      const delta = { x: mid.x - pinchRef.current.mid.x, y: mid.y - pinchRef.current.mid.y };
+      // Functional update: pointer events can arrive faster than renders, and
+      // each step must build on the last one, not on the last render's view.
+      setCardView((current) => {
+        const base =
+          current && current.hole === currentHole && current.phase === roundPhase
+            ? current.view
+            : IDENTITY_VIEW;
+        return {
+          hole: currentHole,
+          phase: roundPhase,
+          view: panBy(zoomAt(base, mid, factor, box), delta, box),
+        };
+      });
+      pinchRef.current = { distance, mid };
+    } else if (pointersRef.current.size === 1 && !suppressPinRef.current) {
+      placeCrosshair(event);
+    }
+  };
+
+  const cardPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.currentTarget.releasePointerCapture(event.pointerId);
+    pointersRef.current.delete(event.pointerId);
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+    if (pointersRef.current.size === 0) suppressPinRef.current = false;
+  };
+
+  // Wheel zoom for the desktop (AC-3). Attached manually: React registers
+  // wheel listeners passively, and a passive listener cannot stop the sheet
+  // behind the card from scrolling while zooming.
+  useEffect(() => {
+    const element = holeVisualRef.current;
+    if (!element || !showHoleGuide || showingIllustration) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const box = element.getBoundingClientRect();
+      const focal = { x: event.clientX - box.left, y: event.clientY - box.top };
+      setCardView((current) => {
+        const base =
+          current && current.hole === currentHole && current.phase === roundPhase
+            ? current.view
+            : IDENTITY_VIEW;
+        return {
+          hole: currentHole,
+          phase: roundPhase,
+          view: zoomAt(base, focal, Math.exp(-event.deltaY * 0.0022), {
+            width: box.width,
+            height: box.height,
+          }),
+        };
+      });
+    };
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => element.removeEventListener("wheel", onWheel);
+  }, [showHoleGuide, showingIllustration, currentHole, roundPhase]);
   const currentIndex = scheduledHoles.findIndex((item) => item.number === currentHole);
 
   useEffect(() => {
@@ -1035,11 +1159,19 @@ export default function GolfTracker() {
               <div
                 ref={holeVisualRef}
                 className={`hole-guide-visual${showingIllustration ? "" : " measuring"}`}
-                onPointerDown={showingIllustration ? undefined : (event) => { event.currentTarget.setPointerCapture(event.pointerId); placeCrosshair(event); }}
-                onPointerMove={showingIllustration ? undefined : (event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) placeCrosshair(event); }}
-                onPointerUp={showingIllustration ? undefined : (event) => event.currentTarget.releasePointerCapture(event.pointerId)}
+                onPointerDown={showingIllustration ? undefined : cardPointerDown}
+                onPointerMove={showingIllustration ? undefined : cardPointerMove}
+                onPointerUp={showingIllustration ? undefined : cardPointerUp}
+                onPointerCancel={showingIllustration ? undefined : cardPointerUp}
               >
-                <Image src={activeHoleVisual.src} alt={activeHoleVisual.alt} fill sizes="(max-width: 560px) 100vw, 560px" unoptimized />
+                {/* Only the imagery scales; every overlay stays its own size
+                    and is repositioned through the view instead. */}
+                <div
+                  className="hole-guide-zoom"
+                  style={showingIllustration ? undefined : { transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.z})` }}
+                >
+                  <Image src={activeHoleVisual.src} alt={activeHoleVisual.alt} fill sizes="(max-width: 560px) 100vw, 560px" unoptimized />
+                </div>
                 <span className="hole-guide-vignette" aria-hidden="true" />
                 {!showingIllustration && (
                   /* AC-2 — the three numbers ride in a band across the top of
@@ -1051,8 +1183,10 @@ export default function GolfTracker() {
                     <span><small>Back</small><strong>{readout.backYards}</strong></span>
                   </div>
                 )}
-                <span className="hole-guide-marker green">Green</span>
-                <span className="hole-guide-marker tee">Tee</span>
+                {/* The pills label the card's ends, which leave the frame once
+                    zoomed — hide them rather than mislabel whatever is there. */}
+                {view.z <= 1.001 && <span className="hole-guide-marker green">Green</span>}
+                {view.z <= 1.001 && <span className="hole-guide-marker tee">Tee</span>}
                 {!showingIllustration && positionAt && positionOnCard && (
                   <span className="measure-you" style={{ left: `${positionAt.x}px`, top: `${positionAt.y}px` }} aria-hidden="true" />
                 )}

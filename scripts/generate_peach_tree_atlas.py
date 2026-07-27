@@ -364,11 +364,59 @@ def card_transform(
 
     scale = max(target, fits_along, fits_across)
 
+    # The card is a rotated rectangle cut from the raster, and nothing above
+    # checks that the rectangle stays on it. Once the frame tightened to the
+    # hole (MAR-31), a hole near the imagery's edge could poke past it — hole
+    # 2's card reached ~270px beyond the southern edge and the overhang
+    # rendered black. Fit first: if the card cannot fit on the raster at this
+    # scale in any position, tighten the frame to the largest scale that can.
+    # Then slide the centre the shortest distance that puts every corner
+    # inside.
+    half_extent_x = (output_width / 2) * abs(perp_x) + (output_height / 2) * abs(unit_x)
+    half_extent_y = (output_width / 2) * abs(perp_y) + (output_height / 2) * abs(unit_y)
+    largest_fitting = min(
+        source_width / (2 * half_extent_x), source_height / (2 * half_extent_y)
+    )
+    if scale > largest_fitting:
+        if max(fits_along, fits_across) > largest_fitting:
+            raise ValueError(
+                "hole card cannot fit inside the raster even at the minimum "
+                "frame that still contains the hole — the raster is too small "
+                "for this hole's position"
+            )
+        scale = largest_fitting
+
+    center_x = min(
+        max(center_x, half_extent_x * scale), source_width - half_extent_x * scale
+    )
+    center_y = min(
+        max(center_y, half_extent_y * scale), source_height - half_extent_y * scale
+    )
+
+    # Belt and braces: a future edit to the maths above must fail loudly here
+    # rather than quietly ship a black-banded card again.
+    for signs in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
+        corner_x = center_x + signs[0] * half_extent_x * scale
+        corner_y = center_y + signs[1] * half_extent_y * scale
+        if not (-1e-6 <= corner_x <= source_width + 1e-6) or not (
+            -1e-6 <= corner_y <= source_height + 1e-6
+        ):
+            raise AssertionError(
+                f"card corner ({corner_x:.1f}, {corner_y:.1f}) left the "
+                f"{source_width}x{source_height} raster after clamping"
+            )
+
     return {
         "center": {"x": center_x, "y": center_y},
         "unit": {"x": unit_x, "y": unit_y},
         "perp": {"x": perp_x, "y": perp_y},
         "scale": scale,
+        # How much taller the frame is than the hole, after any fit reduction.
+        # Matches TARGET_FRAME_RATIO except on a hole squeezed by the raster's
+        # edge, where this records what was actually achievable.
+        "frameRatio": round(
+            scale * output_height * metres_along / hole_metres, 4
+        ),
     }
 
 

@@ -58,6 +58,28 @@ NEGATIVE_PROMPT = (
     "watermark, buildings added, roads added, distorted, warped, blurry"
 )
 
+# The "photo" style above asks for a photograph and its negative prompt bans
+# painterly output — which is why the locked set reads as an enhanced aerial.
+# "painted" asks for the premium yardage-book look instead and stops banning
+# it; whether any grip setting keeps that pretty AND under the 5-yard bar is
+# exactly what a sweep has to answer.
+PAINTED_PROMPT = (
+    "premium hand-painted yardage book illustration of a golf hole, aerial "
+    "view, stylized manicured fairway and green with elegant mow lines, "
+    "painterly valley oak canopies with soft depth, clean sculpted sand "
+    "bunkers, warm golden hour glow, rich saturated colour, refined detail, "
+    "top-down"
+)
+PAINTED_NEGATIVE_PROMPT = (
+    "photograph, satellite image, map, diagram, text, labels, watermark, "
+    "buildings added, roads added, distorted, warped, blurry"
+)
+
+STYLES = {
+    "photo": (PROMPT, NEGATIVE_PROMPT),
+    "painted": (PAINTED_PROMPT, PAINTED_NEGATIVE_PROMPT),
+}
+
 
 def load_pipeline(controlnet_model: str, cache_dir: Path, low_vram: bool = False):
     controlnet = ControlNetModel.from_pretrained(
@@ -100,13 +122,15 @@ def generate(
     steps: int,
     guidance: float,
     controlnet_scale: float,
+    prompt: str = PROMPT,
+    negative_prompt: str = NEGATIVE_PROMPT,
 ) -> Image.Image:
     conditioning = aerial.resize(WORK_SIZE, Image.LANCZOS)
     generator = torch.Generator(device="cuda").manual_seed(seed)
 
     result = pipeline(
-        prompt=PROMPT,
-        negative_prompt=NEGATIVE_PROMPT,
+        prompt=prompt,
+        negative_prompt=negative_prompt,
         image=conditioning,
         control_image=conditioning,
         strength=strength,
@@ -157,6 +181,16 @@ def main() -> None:
     )
     parser.add_argument("--controlnet", type=str, default=CONTROLNET_MODEL)
     parser.add_argument(
+        "--style",
+        choices=sorted(STYLES),
+        default="photo",
+        help=(
+            "prompt family: 'photo' is the shipped enhanced-aerial look; "
+            "'painted' asks for the yardage-book art style and appends the "
+            "style to output filenames so nothing overwrites the photo set"
+        ),
+    )
+    parser.add_argument(
         "--low-vram",
         action="store_true",
         help=(
@@ -184,6 +218,7 @@ def main() -> None:
         (strength, scale) for scale in args.controlnet_scale for strength in args.strength
     ]
 
+    prompt, negative_prompt = STYLES[args.style]
     for strength, controlnet_scale in combinations:
         started = time.time()
         image = generate(
@@ -194,10 +229,13 @@ def main() -> None:
             steps=args.steps,
             guidance=args.guidance,
             controlnet_scale=controlnet_scale,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
         )
+        style_tag = "" if args.style == "photo" else f"-{args.style}"
         stem = (
             f"hole-{args.hole:02d}-locked"
-            f"-s{strength:.2f}-c{controlnet_scale:.2f}"
+            f"-s{strength:.2f}-c{controlnet_scale:.2f}{style_tag}"
         ).replace(".", "_")
         image_path = args.out / f"{stem}.png"
         image.save(image_path)
@@ -218,8 +256,9 @@ def main() -> None:
                     "controlnetConditioningScale": controlnet_scale,
                     "workSize": list(WORK_SIZE),
                     "cardSize": list(CARD_SIZE),
-                    "prompt": PROMPT,
-                    "negativePrompt": NEGATIVE_PROMPT,
+                    "style": args.style,
+                    "prompt": prompt,
+                    "negativePrompt": negative_prompt,
                     "torch": torch.__version__,
                     "lowVram": args.low_vram,
                     "secondsTaken": round(time.time() - started, 1),

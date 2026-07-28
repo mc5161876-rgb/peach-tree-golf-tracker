@@ -124,8 +124,16 @@ def generate(
     controlnet_scale: float,
     prompt: str = PROMPT,
     negative_prompt: str = NEGATIVE_PROMPT,
+    work_scale: int = 1,
 ) -> Image.Image:
-    conditioning = aerial.resize(WORK_SIZE, Image.LANCZOS)
+    # work_scale > 1 runs the diffusion at a multiple of WORK_SIZE so the
+    # model synthesizes finer texture than the 0.6 m NAIP source carries. The
+    # output card scales by the same factor: the extra pixels are the point.
+    # Invented detail is only plausible, so scaled cards must re-earn their
+    # drift pass before shipping.
+    work_size = (WORK_SIZE[0] * work_scale, WORK_SIZE[1] * work_scale)
+    card_size = (CARD_SIZE[0] * work_scale, CARD_SIZE[1] * work_scale)
+    conditioning = aerial.resize(work_size, Image.LANCZOS)
     generator = torch.Generator(device="cuda").manual_seed(seed)
 
     result = pipeline(
@@ -140,7 +148,7 @@ def generate(
         generator=generator,
     ).images[0]
 
-    return result.resize(CARD_SIZE, Image.LANCZOS)
+    return result.resize(card_size, Image.LANCZOS)
 
 
 def main() -> None:
@@ -191,6 +199,18 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--work-scale",
+        type=int,
+        default=1,
+        choices=[1, 2],
+        help=(
+            "run the diffusion at this multiple of the base 960x1280 working "
+            "size and emit a card scaled to match; 2 makes the model invent "
+            "fine texture the 0.6 m aerial cannot supply, at ~4x the compute "
+            "and VRAM — pair with --low-vram on the 12 GB card"
+        ),
+    )
+    parser.add_argument(
         "--low-vram",
         action="store_true",
         help=(
@@ -231,11 +251,13 @@ def main() -> None:
             controlnet_scale=controlnet_scale,
             prompt=prompt,
             negative_prompt=negative_prompt,
+            work_scale=args.work_scale,
         )
         style_tag = "" if args.style == "photo" else f"-{args.style}"
+        scale_tag = "" if args.work_scale == 1 else f"-x{args.work_scale}"
         stem = (
             f"hole-{args.hole:02d}-locked"
-            f"-s{strength:.2f}-c{controlnet_scale:.2f}{style_tag}"
+            f"-s{strength:.2f}-c{controlnet_scale:.2f}{style_tag}{scale_tag}"
         ).replace(".", "_")
         image_path = args.out / f"{stem}.png"
         image.save(image_path)
@@ -254,8 +276,9 @@ def main() -> None:
                     "steps": args.steps,
                     "guidance": args.guidance,
                     "controlnetConditioningScale": controlnet_scale,
-                    "workSize": list(WORK_SIZE),
-                    "cardSize": list(CARD_SIZE),
+                    "workSize": [d * args.work_scale for d in WORK_SIZE],
+                    "cardSize": [d * args.work_scale for d in CARD_SIZE],
+                    "workScale": args.work_scale,
                     "style": args.style,
                     "prompt": prompt,
                     "negativePrompt": negative_prompt,

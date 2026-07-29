@@ -50,12 +50,15 @@ CONTROLNET_MODEL = "xinsir/controlnet-tile-sdxl-1.0"
 PROMPT = (
     "aerial photograph of a golf hole at a private country club, "
     "manicured fairway and rough, mown grass banding, bunkers with clean sand, "
-    "mature valley oak canopies casting soft shadows, golden hour light, "
+    "mature valley oak canopies casting soft shadows, "
+    "pond with clear deep blue water and crisp banks, "
+    "distinct individual trees at the water's edge, golden hour light, "
     "rich natural colour, crisp detail, photographic, top-down"
 )
 NEGATIVE_PROMPT = (
     "illustration, cartoon, painting, cgi render, map, diagram, text, labels, "
-    "watermark, buildings added, roads added, distorted, warped, blurry"
+    "watermark, buildings added, roads added, distorted, warped, blurry, "
+    "algae, pond scum, murky green water, muddy water"
 )
 
 # The "photo" style above asks for a photograph and its negative prompt bans
@@ -63,16 +66,20 @@ NEGATIVE_PROMPT = (
 # "painted" asks for the premium yardage-book look instead and stops banning
 # it; whether any grip setting keeps that pretty AND under the 5-yard bar is
 # exactly what a sweep has to answer.
+# CLIP truncates prompts at 77 tokens and diffusers only warns in the log, so
+# anything past the limit silently vanishes. Keep this under 77 — the water
+# clause earns its place by evicting flourishes, not by appending.
 PAINTED_PROMPT = (
     "premium hand-painted yardage book illustration of a golf hole, aerial "
     "view, stylized manicured fairway and green with elegant mow lines, "
-    "painterly valley oak canopies with soft depth, clean sculpted sand "
-    "bunkers, warm golden hour glow, rich saturated colour, refined detail, "
-    "top-down"
+    "painterly valley oak canopies, clean sculpted sand bunkers, pond with "
+    "clear deep blue water, crisp trees at the pond edge, warm golden light, "
+    "rich saturated colour, top-down"
 )
 PAINTED_NEGATIVE_PROMPT = (
     "photograph, satellite image, map, diagram, text, labels, watermark, "
-    "buildings added, roads added, distorted, warped, blurry"
+    "buildings added, roads added, distorted, warped, blurry, "
+    "algae, pond scum, murky green water, muddy water"
 )
 
 STYLES = {

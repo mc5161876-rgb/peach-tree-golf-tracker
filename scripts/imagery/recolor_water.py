@@ -25,14 +25,24 @@ from collections import deque
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
 # Per-hole water regions: bbox (l, t, r, b) and seed points (x, y), all in
 # 900x1200 card space. Only holes with a pond need an entry.
+# rock_polygon: Mario's ground-truth correction (2026-07-28) — the grey spit
+# the 2022 aerial shows inside the hole 2 pond is drought-era exposed bottom
+# and is underwater today. Grey low-saturation pixels inside this polygon get
+# recolored along with the water. A polygon, not a color-reachability rule:
+# the spit's grey continues seamlessly into the dry waste area, so any
+# flood-fill escapes the pond (tried, spectacular).
 WATER_REGIONS = {
     2: {
         "bbox": (330, 880, 660, 1150),
         "seeds": [(430, 950), (480, 920), (500, 1010), (507, 1047), (525, 1057), (520, 1035)],
+        "rock_polygon": [
+            (467, 963), (545, 970), (543, 1015), (530, 1055),
+            (498, 1072), (480, 1030), (473, 990),
+        ],
     },
 }
 
@@ -41,7 +51,9 @@ TARGET_RGB = np.array([70.0, 130.0, 185.0])
 BLEND = 0.85
 
 
-def water_mask(a: np.ndarray, bbox: tuple[int, int, int, int], seeds) -> Image.Image:
+def water_mask(
+    a: np.ndarray, bbox: tuple[int, int, int, int], seeds, rock_polygon=None
+) -> Image.Image:
     x0, y0, x1, y1 = bbox
     sub = a[y0:y1, x0:x1]
     r, g, b = sub[..., 0], sub[..., 1], sub[..., 2]
@@ -66,6 +78,17 @@ def water_mask(a: np.ndarray, bbox: tuple[int, int, int, int], seeds) -> Image.I
 
     mask = np.zeros(a.shape[:2], dtype=np.uint8)
     mask[y0:y1, x0:x1] = seen.astype(np.uint8) * 255
+
+    if rock_polygon:
+        poly = Image.new("L", (a.shape[1], a.shape[0]), 0)
+        ImageDraw.Draw(poly).polygon(rock_polygon, fill=255)
+        inside = np.asarray(poly) > 0
+        sat = v - sub.min(axis=-1)
+        grey = (sat < 35) & (v > 80) & (np.abs(r - b) < 25)
+        rocks = np.zeros(a.shape[:2], dtype=bool)
+        rocks[y0:y1, x0:x1] = grey
+        mask[inside & rocks] = 255
+
     m = Image.fromarray(mask)
     # bridge scum flecks, then feather so the repaint has no hard seam
     m = m.filter(ImageFilter.MaxFilter(9)).filter(ImageFilter.MinFilter(5))
@@ -88,10 +111,12 @@ def main() -> None:
     a = np.asarray(aerial).astype(np.float32)
 
     region = WATER_REGIONS[args.hole]
-    m = water_mask(a, region["bbox"], region["seeds"])
+    m = water_mask(a, region["bbox"], region["seeds"], region.get("rock_polygon"))
     mf = np.asarray(m).astype(np.float32)[..., None] / 255.0
 
-    lum = (a.mean(axis=-1, keepdims=True) / 255.0).clip(0.25, 1.0)
+    # upper clip keeps bright rock pixels from turning neon — over water the
+    # luminance only carries ripple texture, not identity
+    lum = (a.mean(axis=-1, keepdims=True) / 255.0).clip(0.25, 0.75)
     target = TARGET_RGB * (0.6 + 0.8 * lum)
     out = a * (1 - BLEND * mf) + target * (BLEND * mf)
 

@@ -1,0 +1,96 @@
+{
+  "hole": 13,
+  "skeletonVsAerial": {
+    "maxYards": 0.00829485941007265,
+    "medianYards": 0.001968561285740407
+  },
+  "best": {
+    "attempt": 1,
+    "frameFound": true,
+    "eccCC": 0.812,
+    "eccAffine": [
+      [
+        1.0184999704360962,
+        -9.999999747378752e-05,
+        -9.3371000289917
+      ],
+      [
+        0.0010999999940395355,
+        1.0153000354766846,
+        -9.794099807739258
+      ]
+    ],
+    "snapMedianPx": 1.2,
+    "snapMaxPx": 2.35,
+    "vsSkeleton150": {
+      "hole": 13,
+      "card": "final/hole-13-attempt1.png",
+      "tile": 150,
+      "tilesLand": 48,
+      "tilesWater": 0,
+      "tilesDropped": 0,
+      "landMaxYards": 0.61,
+      "landMedianYards": 0.09,
+      "waterMaxYards": 0.0,
+      "overallMaxYards": 0.61,
+      "overallMedianYards": 0.09,
+      "worstLandTile": {
+        "x": 75,
+        "y": 1125,
+        "yards": 0.61,
+        "waterFrac": 0.0
+      },
+      "pass": true,
+      "note": "water tiles follow the OSM/today shoreline by design; their offset vs the 2022 aerial is reported, not judged"
+    },
+    "vsSkeleton100": {
+      "hole": 13,
+      "card": "final/hole-13-attempt1.png",
+      "tile": 100,
+      "tilesLand": 108,
+      "tilesWater": 0,
+      "tilesDropped": 0,
+      "landMaxYards": 0.88,
+      "landMedianYards": 0.22,
+      "waterMaxYards": 0.0,
+      "overallMaxYards": 0.88,
+      "overallMedianYards": 0.22,
+      "worstLandTile": {
+        "x": 550,
+        "y": 250,
+        "yards": 0.88,
+        "waterFrac": 0.0
+      },
+      "pass": true,
+      "note": "water tiles follow the OSM/today shoreline by design; their offset vs the 2022 aerial is reported, not judged"
+    },
+    "vsAerial150": {
+      "hole": 13,
+      "card": "final/hole-13-attempt1.png",
+      "tile": 150,
+      "tilesLand": 48,
+      "tilesWater": 0,
+      "tilesDropped": 0,
+      "landMaxYards": 0.62,
+      "landMedianYards": 0.15,
+      "waterMaxYards": 0.0,
+      "overallMaxYards": 0.62,
+      "overallMedianYards": 0.15,
+      "worstLandTile": {
+        "x": 75,
+        "y": 1125,
+        "yards": 0.62,
+        "waterFrac": 0.0
+      },
+      "pass": true,
+      "note": "water tiles follow the OSM/today shoreline by design; their offset vs the 2022 aerial is reported, not judged"
+    },
+    "candidate": "final/hole-13-attempt1.png",
+    "raw": "out/hole13-gpt/hole-13-gptimage2-run1-raw.png"
+  },
+  "pass": true,
+  "secondsTotal": 38.0,
+  "painter": "gpt-image-2-high via Hermes openai-codex plugin",
+  "styleRef": "refs/hole-13-original.png",
+  "skeleton": "cond/hole-13-base-v6.png"
+}

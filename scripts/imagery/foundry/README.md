@@ -44,3 +44,13 @@ coarse tiles, ~1.5 px median) onto the skeleton, then gate. Hole 7: 0.41 yd max 
 median vs skeleton; hole 2: 0.53 / 0.10 (and 0.55 vs the real aerial). Evidence:
 `evidence/gptimage2-finals.jpg`. The white frame matters: unframed, the model re-crops by a
 few percent (4 yd median raw).
+
+## 18-hole run, 2026-08-22 21:03 — 18/18 pass
+
+`pipeline_hole.py --hole N` runs the whole chain (skeleton → frame → gpt-image-2 → crop → ECC +
+snap → gate → final/hole-NN.png + .json + sheet); `run_all.sh` loops the course. Results in
+`results-2026-08-22/` (sidecars) and `evidence/all-18-finals.jpg`. Worst card 4.52 yd (hole 7,
+second paint attempt), median of medians 0.08 yd, two holes needed a second paint (7, 11),
+21 minutes end to end. Finished cards themselves are in the vault: `Projects/Golf/Hole Cards
+2026-08-22/cards/` (not committed here — 27 MB; they enter the repo via the shipping PR once
+Mario approves the look). `build_brief.py` renders the one-page brief (Artifact + vault note).

@@ -32,15 +32,21 @@ WATER_CLASS = 8
 
 
 def measure_classed(hole: int, card: Path, classes_path: Path, tile: int = 150, tolerance: float = 5.0,
-                    reference: Path | None = None) -> dict:
+                    reference: Path | None = None, override_path: Path | None = None) -> dict:
     geometry = md.load_geometry(REPO / "public/course/peach-tree/sources.json", hole)
+    vs_aerial = reference is None
     reference = reference or REPO / f"public/course/peach-tree/hole-{hole:02d}.webp"
     card_size = (geometry["card"]["width"], geometry["card"]["height"])
     ref = md.load_card(reference, card_size)
     cand = md.load_card(card, card_size)
     classes = np.array(Image.open(classes_path).convert("L").resize(card_size, Image.NEAREST))
+    if override_path is None:
+        ov_cand = classes_path.with_name(classes_path.name.replace("-classes.png", "-override.png"))
+        override_path = ov_cand if ov_cand.exists() else None
+    override = (np.array(Image.open(override_path).convert("L").resize(card_size, Image.NEAREST)) > 127) if override_path else None
     ypx = md.yards_per_card_pixel(geometry)
     land, water, dropped = [], [], 0
+    overridden = []
     for top in range(0, card_size[1] - tile + 1, tile):
         for left in range(0, card_size[0] - tile + 1, tile):
             r = ref[top:top + tile, left:left + tile]
@@ -56,6 +62,10 @@ def measure_classed(hole: int, card: Path, classes_path: Path, tile: int = 150, 
             cls_tile = classes[top:top + tile, left:left + tile]
             water_frac = float((cls_tile == WATER_CLASS).mean())
             entry = {"x": left + tile // 2, "y": top + tile // 2, "yards": round(yards, 2), "waterFrac": round(water_frac, 2)}
+            ov_frac = float(override[top:top + tile, left:left + tile].mean()) if override is not None else 0.0
+            if ov_frac >= 0.15 and vs_aerial:
+                # vs the AERIAL only: Mario overrode this ground (cleared/added trees), so the 2022 photo is not the truth here
+                entry["overrideFrac"] = round(ov_frac, 2); overridden.append(entry); continue
             (water if water_frac >= 0.3 else land).append(entry)
     land_max = max((t["yards"] for t in land), default=0.0)
     land_med = float(np.median([t["yards"] for t in land])) if land else 0.0
@@ -67,6 +77,8 @@ def measure_classed(hole: int, card: Path, classes_path: Path, tile: int = 150, 
         "tile": tile,
         "tilesLand": len(land),
         "tilesWater": len(water),
+        "tilesOverride": len(overridden),
+        "overrideMaxYards": round(max((t["yards"] for t in overridden), default=0.0), 2),
         "tilesDropped": dropped,
         "landMaxYards": round(land_max, 2),
         "landMedianYards": round(land_med, 2),

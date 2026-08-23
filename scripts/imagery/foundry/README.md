@@ -54,3 +54,13 @@ second paint attempt), median of medians 0.08 yd, two holes needed a second pain
 21 minutes end to end. Finished cards themselves are in the vault: `Projects/Golf/Hole Cards
 2026-08-22/cards/` (not committed here — 27 MB; they enter the repo via the shipping PR once
 Mario approves the look). `build_brief.py` renders the one-page brief (Artifact + vault note).
+
+## Corrections layer (2026-08-23)
+
+The skeleton's trees come from the 2022 aerial; the course has changed since. `corrections.py` /
+`corrections.json` hold Mario's per-hole ground truth — `clear_trees` polygons, `add_trees` crowns,
+`set_class` polygons ("this corridor is mown fairway") — in card pixels, applied before painting.
+Record them from what Mario says: `corrections.py --hole 7 --clear-band 25 185 both --band-width 115`
+or `--clear-cells C4 C5` (grid from `evidence/hole-07-markup-guide.jpg`), `--add-tree X Y R`,
+`--set-class-band fairway 25 185 both --band-width 62`. Override tiles are excluded from the
+skeleton-vs-aerial number (reported separately); the painter gate is unaffected.

@@ -244,6 +244,13 @@ def render(hole: int, osm_path: Path, out_dir: Path, no_route: bool = False, det
     osm = json.loads(osm_path.read_text())
     aerial = np.array(Image.open(REPO / f"public/course/peach-tree/hole-{hole:02d}.webp").convert("RGB"))
     tree_mask, dry_mask = classify_aerial(aerial)
+    # Mario's ground-truth overrides (trees cleared since 2022, trees to add): corrections.json
+    try:
+        from corrections import apply_corrections
+        tree_mask, override_mask = apply_corrections(hole, tree_mask)
+    except Exception as exc:  # corrections are optional
+        override_mask = np.zeros_like(tree_mask)
+        print(f"  (no corrections applied: {exc})")
 
     W, H = CARD
     base = Image.new("RGB", (W, H), PALETTE["ground_green"])
@@ -274,6 +281,17 @@ def render(hole: int, osm_path: Path, out_dir: Path, no_route: bool = False, det
             if len(inner) >= 3:
                 d.polygon(inner, fill=PALETTE["ground_green"])
                 dc.polygon(inner, fill=CLASS_ID["ground_green"])
+
+    # Mario's class overrides (e.g. "this corridor is mown fairway today")
+    try:
+        from corrections import class_overrides
+        for item in class_overrides(hole):
+            kind = item["class"]
+            if kind in PALETTE and kind in CLASS_ID:
+                d.polygon([tuple(p) for p in item["polygon"]], fill=PALETTE[kind])
+                dc.polygon([tuple(p) for p in item["polygon"]], fill=CLASS_ID[kind])
+    except Exception as exc:
+        print(f"  (class overrides skipped: {exc})")
 
     # trees from the aerial: shadow first, then canopy with a lit edge, on top of ground/fairway.
     # Never over water, sand, greens or tees — those shapes are surveyed-ish vectors and dark
@@ -322,6 +340,7 @@ def render(hole: int, osm_path: Path, out_dir: Path, no_route: bool = False, det
         arr = np.array(base).astype(np.float32)
         clean = np.isin(np.array(classes), [CLASS_ID["water"], CLASS_ID["bunker"]])
         hp[clean] *= 0.25
+        hp[override_mask] = 0.0
         arr = np.clip(arr + hp[..., None], 0, 255).astype(np.uint8)
         base = Image.fromarray(arr)
     d = ImageDraw.Draw(base)
@@ -339,6 +358,7 @@ def render(hole: int, osm_path: Path, out_dir: Path, no_route: bool = False, det
     out_dir.mkdir(parents=True, exist_ok=True)
     base.save(out_dir / f"hole-{hole:02d}-base{suffix}.png")
     classes.save(out_dir / f"hole-{hole:02d}-classes.png")
+    Image.fromarray((override_mask.astype(np.uint8) * 255)).save(out_dir / f"hole-{hole:02d}-override.png")
     counts = {k: int((np.array(classes) == v).sum()) for k, v in CLASS_ID.items()}
     print(f"hole {hole}: base + classes written; px per class: {counts}")
 

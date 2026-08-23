@@ -180,9 +180,16 @@ def main() -> None:
     if best is None:
         print(f"[hole {h}] NO RENDER", flush=True)
         sys.exit(2)
-    # 7. write
+    # 7. write (+ Qwen content QA, soft)
     final_p = args.out / f"hole-{hh}.png"
     Image.open(best["candidate"]).save(final_p)
+    try:
+        from qa_qwen import qa as qwen_qa
+        best["qwen"] = qwen_qa(skel_p, final_p)
+        if best["qwen"].get("available"):
+            print(f"[hole {h}] qwen QA: {'OK' if best['qwen']['pass'] else 'ISSUES ' + ','.join(best['qwen']['issues'])} ({best['qwen']['seconds']}s)", flush=True)
+    except Exception as exc:
+        best["qwen"] = {"available": False, "error": str(exc)[:200]}
     meta = {"hole": h, "skeletonVsAerial": {"maxYards": sk_vs_aer["maxYards"], "medianYards": sk_vs_aer["medianYards"]},
             "best": best, "pass": best["vsSkeleton150"]["landMaxYards"] <= TOL, "secondsTotal": round(time.time() - t0, 1),
             "painter": "gpt-image-2-high via Hermes openai-codex plugin", "styleRef": str(ref_p), "skeleton": str(skel_p)}

@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Peach Tree Card Review</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#14261c; --panel:#1b3325; --ink:#efe7d2; --muted:#b9c2ad; --gold:#d8b257; --ok:#7cc56f; --bad:#ff9d8c; --rule:#2b4a36; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.4 -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  header { display:flex; align-items:center; gap:14px; padding:10px 16px; border-bottom:1px solid var(--rule); flex-wrap:wrap; }
+  header h1 { font-size:18px; margin:0 8px 0 0; letter-spacing:.02em; }
+  .holes { display:flex; gap:4px; flex-wrap:wrap; }
+  .holes button { width:34px; height:30px; border:1px solid var(--rule); background:var(--panel); color:var(--ink); border-radius:4px; cursor:pointer; font-weight:600; }
+  .holes button.sel { outline:2px solid var(--gold); }
+  .holes button.ok { border-bottom:3px solid var(--ok); } .holes button.appr { background:#2e6b3a; }
+  main { display:grid; grid-template-columns: 300px 1fr; gap:14px; padding:14px 16px; }
+  .tools { background:var(--panel); border:1px solid var(--rule); border-radius:6px; padding:12px; display:flex; flex-direction:column; gap:10px; align-self:start; position:sticky; top:10px; }
+  .tools h2 { font-size:13px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin:6px 0 2px; }
+  .tool { display:flex; align-items:center; gap:8px; padding:7px 8px; border:1px solid var(--rule); border-radius:5px; background:#16281e; cursor:pointer; }
+  .tool.sel { outline:2px solid var(--gold); }
+  .sw { width:16px; height:16px; border-radius:3px; border:1px solid #0008; }
+  .tool small { color:var(--muted); margin-left:auto; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  button.act { padding:9px 12px; border:0; border-radius:5px; background:var(--gold); color:#1b2a1f; font-weight:700; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--ink); border:1px solid var(--rule); }
+  button:disabled { opacity:.5; cursor:default; }
+  .layers button { padding:6px 9px; border:1px solid var(--rule); background:#16281e; color:var(--ink); border-radius:4px; cursor:pointer; }
+  .layers button.sel { background:#2e6b3a; }
+  .stage { position:relative; width:min(100%, 70vh * 0.75); aspect-ratio:3/4; margin:0 auto; background:#000; border:1px solid var(--rule); }
+  .stage img, .stage canvas { position:absolute; inset:0; width:100%; height:100%; }
+  #base { object-fit:fill; } #orig { object-fit:fill; pointer-events:none; }
+  #marks, #live { pointer-events:none; }
+  #hit { cursor:crosshair; }
+  .status { font-size:14px; color:var(--muted); min-height:20px; }
+  .status b.ok { color:var(--ok); } .status b.bad { color:var(--bad); }
+  textarea { width:100%; min-height:54px; background:#16281e; color:var(--ink); border:1px solid var(--rule); border-radius:5px; padding:6px; font:inherit; }
+  input[type=range] { width:100%; }
+  .hint { font-size:12px; color:var(--muted); }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } .tools { position:static; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Peach Tree · Card Review</h1>
+  <div class="holes" id="holes"></div>
+  <span class="status" id="hdr"></span>
+</header>
+<main>
+  <aside class="tools">
+    <h2>Show</h2>
+    <div class="row layers" id="layers">
+      <button data-layer="card" class="sel">Card</button><button data-layer="aerial">Aerial</button><button data-layer="skeleton">Skeleton</button><button data-layer="previous">Previous</button>
+    </div>
+    <label class="row"><span style="width:110px">Your original</span><input type="range" id="origAlpha" min="0" max="100" value="0"></label>
+    <h2>Paint</h2>
+    <div class="tool sel" data-tool="clear"><span class="sw" style="background:#e63c3c"></span>Remove trees<small>brush</small></div>
+    <div class="tool" data-tool="addtree"><span class="sw" style="background:#5a3c1e"></span>Add a tree<small>click</small></div>
+    <div class="tool" data-tool="fairway"><span class="sw" style="background:#78dc50"></span>Fairway (mown)<small>brush</small></div>
+    <div class="tool" data-tool="rough"><span class="sw" style="background:#288c3c"></span>Rough (green)<small>brush</small></div>
+    <div class="tool" data-tool="dry"><span class="sw" style="background:#dcb46e"></span>Dry / waste<small>brush</small></div>
+    <div class="tool" data-tool="water"><span class="sw" style="background:#3c8ce6"></span>Water<small>brush</small></div>
+    <div class="tool" data-tool="sand"><span class="sw" style="background:#f5ebc8"></span>Sand<small>brush</small></div>
+    <div class="tool" data-tool="erase"><span class="sw" style="background:#fff"></span>Eraser<small>brush</small></div>
+    <label>Brush size <input type="range" id="size" min="6" max="120" value="36"></label>
+    <div class="row"><button class="ghost" id="undo">Undo</button><button class="ghost" id="clearAll">Clear all marks</button></div>
+    <h2>Note (optional)</h2>
+    <textarea id="notes" placeholder="anything the brushes can't say"></textarea>
+    <button class="act" id="save">Save &amp; re-render</button>
+    <div class="row"><button class="ghost" id="approve">✓ Approve this hole</button><button class="ghost" id="unapprove">Un-approve</button></div>
+    <div class="status" id="status"></div>
+    <div class="hint">Paint where the card is wrong vs the course today. Red = trees that aren't there. Marks stay until you erase them. Re-render takes ~1–3 min.</div>
+  </aside>
+  <section>
+    <div class="stage" id="stage">
+      <img id="base" alt="">
+      <img id="orig" alt="" style="opacity:0">
+      <canvas id="marks" width="900" height="1200"></canvas>
+      <canvas id="live" width="900" height="1200"></canvas>
+      <canvas id="hit" width="900" height="1200"></canvas>
+    </div>
+    <p class="hint" style="text-align:center">Tip: flip between Card / Aerial / Skeleton / Previous, slide in your original, then paint on the card.</p>
+  </section>
+</main>
+<script>
+const COLORS = {clear:"#e63c3c", addtree:"#5a3c1e", fairway:"#78dc50", rough:"#288c3c", dry:"#dcb46e", water:"#3c8ce6", sand:"#f5ebc8", erase:"#ffffff"};
+let hole = 7, tool = "clear", layer = "card", strokes = [], drawing = null;
+const $ = s => document.querySelector(s);
+const live = $("#live").getContext("2d"), hit = $("#hit");
+
+function buildHoles() {
+  const h = $("#holes"); h.innerHTML = "";
+  for (let i = 1; i <= 18; i++) { const b = document.createElement("button"); b.textContent = i; b.dataset.hole = i; b.onclick = () => selectHole(i); h.appendChild(b); }
+}
+async function refreshHoleButtons() {
+  for (let i = 1; i <= 18; i++) {
+    const r = await fetch(`/api/state?hole=${i}`).then(r => r.json());
+    const b = document.querySelector(`#holes button[data-hole="${i}"]`);
+    b.classList.toggle("ok", !!(r.result && r.result.pass)); b.classList.toggle("appr", !!r.approved); b.classList.toggle("sel", i === hole);
+  }
+}
+function setLayer(l) { layer = l; document.querySelectorAll("#layers button").forEach(b => b.classList.toggle("sel", b.dataset.layer === l)); $("#base").src = `/img/${l}/${hole}.jpg?t=${Date.now()}`; }
+async function selectHole(i) {
+  hole = i; strokes = []; live.clearRect(0, 0, 900, 1200);
+  document.querySelectorAll("#holes button").forEach(b => b.classList.toggle("sel", +b.dataset.hole === i));
+  const st = await fetch(`/api/state?hole=${i}`).then(r => r.json());
+  setLayer(layer);
+  $("#orig").src = `/img/original/${i}.jpg`;
+  $("#marks").getContext("2d").clearRect(0, 0, 900, 1200);
+  const mk = new Image(); mk.onload = () => $("#marks").getContext("2d").drawImage(mk, 0, 0); mk.src = `/api/marks?hole=${i}&t=${Date.now()}`;
+  const r = st.result;
+  $("#hdr").innerHTML = r ? `Hole ${i}: <b class="${r.pass ? "ok" : "bad"}">${r.pass ? "PASS" : "FAIL"}</b> · ${r.max.toFixed(2)} yd max · ${r.median.toFixed(2)} median${r.qwen ? ` · Qwen check: <b class="${r.qwen === "OK" ? "ok" : "bad"}">${r.qwen}</b>` : ""}${st.approved ? " · <b class=ok>approved</b>" : ""}` : `Hole ${i}: not rendered yet`;
+  $("#status").textContent = st.running ? "Rendering…" : "";
+  if (st.running) poll();
+}
+function pos(e) { const r = hit.getBoundingClientRect(); return [ (e.clientX - r.left) * 900 / r.width, (e.clientY - r.top) * 1200 / r.height ]; }
+function drawStroke(ctx, s) {
+  ctx.save(); ctx.globalAlpha = s.tool === "erase" ? 0.9 : 0.45; ctx.strokeStyle = ctx.fillStyle = COLORS[s.tool]; ctx.lineWidth = s.width; ctx.lineCap = ctx.lineJoin = "round";
+  if (s.tool === "addtree") { const [x, y] = s.points[0]; ctx.globalAlpha = 0.9; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, s.width / 2, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); return; }
+  if (s.points.length === 1) { const [x, y] = s.points[0]; ctx.beginPath(); ctx.arc(x, y, s.width / 2, 0, Math.PI * 2); ctx.fill(); ctx.restore(); return; }
+  ctx.beginPath(); ctx.moveTo(...s.points[0]); for (const p of s.points.slice(1)) ctx.lineTo(...p); ctx.stroke(); ctx.restore();
+}
+function redrawLive() { live.clearRect(0, 0, 900, 1200); for (const s of strokes) drawStroke(live, s); }
+hit.addEventListener("pointerdown", e => { hit.setPointerCapture(e.pointerId); drawing = {tool, width: +$("#size").value, points: [pos(e)]}; if (tool === "addtree") { strokes.push(drawing); drawing = null; redrawLive(); } });
+hit.addEventListener("pointermove", e => { if (!drawing) return; drawing.points.push(pos(e)); redrawLive(); drawStroke(live, drawing); });
+hit.addEventListener("pointerup", e => { if (!drawing) return; strokes.push(drawing); drawing = null; redrawLive(); });
+document.querySelectorAll(".tool").forEach(t => t.onclick = () => { tool = t.dataset.tool; document.querySelectorAll(".tool").forEach(x => x.classList.toggle("sel", x === t)); });
+document.querySelectorAll("#layers button").forEach(b => b.onclick = () => setLayer(b.dataset.layer));
+$("#origAlpha").oninput = e => $("#orig").style.opacity = e.target.value / 100;
+$("#undo").onclick = () => { strokes.pop(); redrawLive(); };
+$("#clearAll").onclick = async () => { if (!confirm("Remove every saved mark on this hole?")) return; await fetch("/api/clear-marks", {method: "POST", body: JSON.stringify({hole})}); strokes = []; selectHole(hole); };
+$("#save").onclick = async () => {
+  $("#save").disabled = true; $("#status").textContent = "Saving marks and re-rendering (1–3 min)…";
+  const r = await fetch("/api/marks", {method: "POST", body: JSON.stringify({hole, strokes, notes: $("#notes").value})}).then(r => r.json());
+  if (!r.ok) { $("#status").textContent = "Could not save: " + (r.error || "unknown"); $("#save").disabled = false; return; }
+  strokes = []; live.clearRect(0, 0, 900, 1200); $("#notes").value = "";
+  const mk = new Image(); mk.onload = () => { const c = $("#marks").getContext("2d"); c.clearRect(0, 0, 900, 1200); c.drawImage(mk, 0, 0); }; mk.src = `/api/marks?hole=${hole}&t=${Date.now()}`;
+  poll();
+};
+async function poll() {
+  const st = await fetch(`/api/status?hole=${hole}`).then(r => r.json());
+  if (st.running) { $("#status").textContent = "Rendering… (" + Math.round((Date.now() / 1000 - (st.started || Date.now() / 1000))) + "s)"; setTimeout(poll, 4000); return; }
+  $("#save").disabled = false;
+  if (st.result) { $("#status").innerHTML = `Done: <b class="${st.result.pass ? "ok" : "bad"}">${st.result.pass ? "PASS" : "FAIL"}</b> · ${st.result.max.toFixed(2)} yd max · ${st.result.median.toFixed(2)} median · paint attempt ${st.result.attempt}${st.result.qwen ? ` · Qwen: <b class="${st.result.qwen === "OK" ? "ok" : "bad"}">${st.result.qwen}</b>` : ""}`; }
+  else if (st.log) { $("#status").textContent = "Render finished without a result — see log."; }
+  setLayer("card"); refreshHoleButtons();
+}
+$("#approve").onclick = async () => { await fetch("/api/approve", {method: "POST", body: JSON.stringify({hole, approved: true})}); refreshHoleButtons(); selectHole(hole); };
+$("#unapprove").onclick = async () => { await fetch("/api/approve", {method: "POST", body: JSON.stringify({hole, approved: false})}); refreshHoleButtons(); selectHole(hole); };
+buildHoles(); selectHole(7); refreshHoleButtons();
+</script>
+</body>
+</html>

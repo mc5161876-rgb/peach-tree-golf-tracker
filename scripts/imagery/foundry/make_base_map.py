@@ -268,10 +268,13 @@ def render(hole: int, osm_path: Path, out_dir: Path, no_route: bool = False, det
     tree_mask, dry_mask = classify_aerial(aerial)
     # Mario's ground-truth overrides (trees cleared since 2022, trees to add): corrections.json
     try:
-        from corrections import apply_corrections
+        from corrections import apply_corrections, masks_for
         tree_mask, override_mask = apply_corrections(hole, tree_mask)
+        tree_edit_mask, _adds = masks_for(hole)   # only where trees were removed/added is the photo texture wrong
+        for x, y, r in _adds:
+            cv2.circle(tree_edit_mask.view(np.uint8), (int(x), int(y)), int(r) + 4, 1, -1)
     except Exception as exc:  # corrections are optional
-        override_mask = np.zeros_like(tree_mask)
+        override_mask = np.zeros_like(tree_mask); tree_edit_mask = np.zeros_like(tree_mask)
         print(f"  (no corrections applied: {exc})")
 
     W, H = CARD
@@ -307,18 +310,34 @@ def render(hole: int, osm_path: Path, out_dir: Path, no_route: bool = False, det
     # Mario's class overrides (e.g. "this corridor is mown fairway today")
     try:
         from corrections import class_overrides
+        protected_ids = [CLASS_ID["green"], CLASS_ID["tee"], CLASS_ID["bunker"], CLASS_ID["water"], CLASS_ID["path"]]
         for item in class_overrides(hole):
             kind = item["class"]
             if kind in PALETTE and kind in CLASS_ID:
-                d.polygon([tuple(p) for p in item["polygon"]], fill=PALETTE[kind])
-                dc.polygon([tuple(p) for p in item["polygon"]], fill=CLASS_ID[kind])
+                before_cls = np.array(classes)
+                before_img = np.array(base)
+                keep = np.isin(before_cls, protected_ids)
+                if kind != "fairway":
+                    keep |= before_cls == CLASS_ID["fairway"]  # rough/dry overrides never eat an OSM fairway either
+                if "mask" in item:
+                    mm = item["mask"]
+                    ai = np.array(base); ac = np.array(classes)
+                    ai[mm] = PALETTE[kind]; ac[mm] = CLASS_ID[kind]
+                    base = Image.fromarray(ai); classes = Image.fromarray(ac)
+                else:
+                    d.polygon([tuple(p) for p in item["polygon"]], fill=PALETTE[kind])
+                    dc.polygon([tuple(p) for p in item["polygon"]], fill=CLASS_ID[kind])
+                after_cls = np.array(classes); after_img = np.array(base)
+                after_cls[keep] = before_cls[keep]; after_img[keep] = before_img[keep]
+                classes = Image.fromarray(after_cls); base = Image.fromarray(after_img)
+                d = ImageDraw.Draw(base); dc = ImageDraw.Draw(classes)
     except Exception as exc:
         print(f"  (class overrides skipped: {exc})")
 
     # trees from the aerial: shadow first, then canopy with a lit edge, on top of ground/fairway.
     # Never over water, sand, greens or tees — those shapes are surveyed-ish vectors and dark
     # water would otherwise be mis-read as canopy.
-    protected = np.isin(np.array(classes), [CLASS_ID["water"], CLASS_ID["bunker"], CLASS_ID["green"], CLASS_ID["tee"]])
+    protected = np.isin(np.array(classes), [CLASS_ID["water"], CLASS_ID["bunker"], CLASS_ID["green"], CLASS_ID["tee"], CLASS_ID["path"], CLASS_ID["fairway"]])
     protected = cv2.dilate(protected.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool)
     tree_mask = tree_mask & ~protected
     canopy = tree_mask.astype(np.uint8) * 255
@@ -362,7 +381,7 @@ def render(hole: int, osm_path: Path, out_dir: Path, no_route: bool = False, det
         arr = np.array(base).astype(np.float32)
         clean = np.isin(np.array(classes), [CLASS_ID["water"], CLASS_ID["bunker"]])
         hp[clean] *= 0.25
-        hp[override_mask] = 0.0
+        hp[tree_edit_mask] = 0.0
         arr = np.clip(arr + hp[..., None], 0, 255).astype(np.uint8)
         base = Image.fromarray(arr)
     d = ImageDraw.Draw(base)

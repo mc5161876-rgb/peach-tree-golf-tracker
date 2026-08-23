@@ -113,14 +113,33 @@ def band_to_polygon(hole: int, yd0: float, yd1: float, side: str = "both", width
     return [[round(x, 1), round(y, 1)] for x, y in poly]
 
 
+MARKS = HERE / "marks"
+
+
+def _mark_mask(hole: int, tool: str):
+    p = MARKS / f"hole-{hole:02d}-{tool}.png"
+    if not p.exists():
+        return None
+    from PIL import Image
+    return np.array(Image.open(p).convert("L")) > 127
+
+
 def masks_for(hole: int, data: dict | None = None):
-    """Return (clear_mask, add_list) for a hole; clear_mask is a bool HxW array."""
+    """Return (clear_mask, add_list) for a hole; clear_mask is a bool HxW array.
+    Sources: corrections.json polygons AND the review app's painted masks (marks/)."""
     data = load() if data is None else data
     entry = data.get(str(hole), {})
     clear = np.zeros((CARD_H, CARD_W), np.uint8)
     for poly in entry.get("clear_trees", []):
         cv2.fillPoly(clear, [np.array(poly, np.int32)], 1)
-    return clear.astype(bool), entry.get("add_trees", [])
+    m = _mark_mask(hole, "clear")
+    if m is not None:
+        clear[m] = 1
+    adds = list(entry.get("add_trees", []))
+    pj = MARKS / f"hole-{hole:02d}-addtree.json"
+    if pj.exists():
+        adds += json.loads(pj.read_text())
+    return clear.astype(bool), adds
 
 
 def apply_corrections(hole: int, tree_mask: np.ndarray, data: dict | None = None):
@@ -135,6 +154,10 @@ def apply_corrections(hole: int, tree_mask: np.ndarray, data: dict | None = None
     # set_class polygons also count as overrides (the 2022 photo is not the truth there)
     for item in (data or load()).get(str(hole), {}).get("set_class", []):
         cv2.fillPoly(override.view(np.uint8), [np.array(item["polygon"], np.int32)], 1)
+    for tool in ("fairway", "rough", "dry", "water", "sand"):
+        m = _mark_mask(hole, tool)
+        if m is not None:
+            override[m] = True
     return tm.astype(bool), override.astype(bool)
 
 
@@ -142,9 +165,15 @@ ALIASES = {"rough": "ground_green", "grass": "ground_green", "waste": "ground_dr
 
 
 def class_overrides(hole: int, data: dict | None = None) -> list[dict]:
-    """[{'class': 'fairway', 'polygon': [[x,y],...]}, ...] — ground Mario says is a different class today."""
+    """[{'class': 'fairway', 'polygon': [[x,y],...]}, ...] — ground Mario says is a different class today.
+    Painted masks from the review app come back as {'class': ..., 'mask': bool HxW} entries."""
     items = (data or load()).get(str(hole), {}).get("set_class", [])
-    return [{**it, "class": ALIASES.get(it["class"], it["class"])} for it in items]
+    out = [{**it, "class": ALIASES.get(it["class"], it["class"])} for it in items]
+    for tool, cls in (("fairway", "fairway"), ("rough", "ground_green"), ("dry", "ground_dry"), ("water", "water"), ("sand", "bunker")):
+        m = _mark_mask(hole, tool)
+        if m is not None and m.any():
+            out.append({"class": cls, "mask": m})
+    return out
 
 
 if __name__ == "__main__":

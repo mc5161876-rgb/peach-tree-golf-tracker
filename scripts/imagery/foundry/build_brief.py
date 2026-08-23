@@ -131,7 +131,7 @@ def main() -> None:
                 f"{'—' if r['missing'] else ('PASS' if r['pass'] else 'FAIL')} |"
                 for r in rows),
         )
-        vault = Path.home() / "AriesHQ/Projects/Golf" / f"Peach Tree Hole Cards - Accurate and Beautiful Process {today}.md"
+        vault = Path.home() / "AriesHQ/Projects/Golf" / "Peach Tree Hole Cards - Accurate and Beautiful Process.md"
         vault.write_text(md)
         print("wrote", vault)
 
@@ -192,7 +192,7 @@ td {{ padding:6px 8px; border-bottom:1px solid var(--rule); white-space:nowrap; 
   <div class="kicker">Peach Tree Golf &amp; Country Club · Marysville · {today}</div>
   <h1>Peach Tree Hole Cards</h1>
   <div class="rule"></div>
-  <p class="lede">The hole art you like, with yardages you can trust. One process, six steps, measured on every hole. This page is the whole thing — what it is, how it works, how it did on all 18, and the two calls only you can make.</p>
+  <p class="lede">The hole art you like, with yardages you can trust. One process, seven steps, measured on every hole. This page is the whole thing — what it is, how it works, how it did on all 18, and the two calls only you can make.</p>
 
   <div class="score">{cells}</div>
   <p class="caption">All 18 holes. The number is the worst tile drift on that hole's finished card, in yards, against its exact skeleton. Green = under 5 yd. {n_pass} of {n_done} rendered holes pass; worst card {worst:.1f} yd, typical {med_mid:.2f} yd.</p>
@@ -205,6 +205,7 @@ td {{ padding:6px 8px; border-bottom:1px solid var(--rule); white-space:nowrap; 
   <h2>The process</h2>
   <ol class="steps">
     <li><div><b>Skeleton</b><p>Every fairway, green, tee, bunker, pond, cart path and hole line comes from OpenStreetMap's survey of Peach Tree, projected through the app's own card math. Trees and dry ground are read off the 2022 aerial. Drawn like a yardage book: mow stripes, modeled crowns, long shadows. It sits <strong>0.01 yd</strong> from the aerial.</p></div></li>
+    <li><div><b>Correct</b><p>The 2022 aerial is stale where the club has changed things &mdash; trees cleared, a corridor mown, a tree planted. You say where, as grid cells or yards from the tee (&ldquo;25&ndash;185 yd, left side&rdquo;), and it is applied to the skeleton before anything is painted. Those areas are flagged in the measurement instead of being called drift. Same mechanism fixes the hole 6 and hole 8 trees.</p></div></li>
     <li><div><b>Frame</b><p>The skeleton is padded to the painter's aspect ratio with a thin white border. The border is a fiducial — without it the painter quietly re-crops by a few percent (4 yd of error); with it, framing holds.</p></div></li>
     <li><div><b>Paint</b><p>gpt-image-2 — the same family that made your originals — repaints the skeleton in the style of your hole-by-hole art with one instruction: geometry is sacred. Runs through the Codex sign-in already on the Mac Studio; about a minute a hole, no API key.</p></div></li>
     <li><div><b>Snap</b><p>The painting is cropped to its frame and re-aligned to the skeleton: a global fit, then a gentle local snap of one or two pixels. It moves paint by less than a yard; it never moves the map.</p></div></li>
@@ -252,6 +253,8 @@ what passes. {n_pass} of {n_done} rendered holes pass the 5-yd gate; worst card 
 1. **Skeleton** — OSM fairways/greens/tees/bunkers/water/cart paths/hole line through the app's card
    transform + trees/dry ground from the 2022 aerial, drawn yardage-book style (`make_base_map.py
    --procedural --dry-sigma 4 --detail 1.0`). 0.01 yd from the aerial.
+1b. **Correct** — Mario's ground truth (`corrections.py`/`corrections.json`: clear/add trees, mown corridors) applied
+   to the skeleton before painting; override tiles flagged in the gate, not counted as drift.
 2. **Frame** — pad to 2:3 with a thin white border (fiducial; without it gpt-image-2 re-crops ~4 yd).
 3. **Paint** — gpt-image-2 via Hermes `image_gen/openai-codex` (Codex OAuth, ~1 min/hole), style ref =
    the hole's original illustration, prompt "geometry is sacred" (`gpt_image_render.py`).

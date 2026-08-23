@@ -30,6 +30,7 @@ from PIL import Image, ImageDraw, ImageFilter
 REPO = Path.home() / "rex/peach-tree-golf-tracker"
 CARD = (900, 1200)
 SHADOW_DX, SHADOW_DY, SHADOW_DARK = 0.9, 1.15, 0.5
+TREES_MODE = "crowns"
 DRY_SIGMA = 9.0  # smoothing of the dry-ground mask; lower hugs the aerial's real boundaries
 
 # Illustration palette: warm late-afternoon yardage-book look.
@@ -131,7 +132,7 @@ def _noise(shape, sigma, rng):
     return n / (n.std() + 1e-6)
 
 
-def procedural_surfaces(base: Image.Image, classes: Image.Image, aerial: np.ndarray, g: dict, tree_mask: np.ndarray):
+def procedural_surfaces(base: Image.Image, classes: Image.Image, aerial: np.ndarray, g: dict, tree_mask: np.ndarray, trees_mode: str = "crowns", aerial_rgb=None):
     """Make the flat map look like a yardage-book page before the painter sees it:
     mow stripes on fairway/green/tee across the hole direction, grain on rough/dry/sand,
     a water gradient, and individually modeled tree crowns with long warm-light shadows."""
@@ -170,6 +171,27 @@ def procedural_surfaces(base: Image.Image, classes: Image.Image, aerial: np.ndar
     rim = (bm > 0) & (cv2.erode(bm, np.ones((5, 5), np.uint8)) == 0)
     arr[rim] *= 0.92
     arr = np.clip(arr, 0, 255)
+
+    if trees_mode == "photo":
+        # Trees exactly as the photo has them: composite the aerial's own canopy+shadow pixels (graded toward
+        # the palette, contrast lifted) wherever the tree mask says tree. Individual trees stay individual,
+        # dense stands stay dense, nothing is invented.
+        tm = tree_mask.astype(np.uint8)
+        soft = cv2.GaussianBlur(tm.astype(np.float32), (0, 0), 1.5)
+        # shadow halo: the photo's own shadow is inside the mask already (val<42); add a faint extra to the lower-right
+        sh = np.roll(np.roll(tm, 6, axis=0), 4, axis=1).astype(np.float32)
+        sh = cv2.GaussianBlur(sh, (0, 0), 3.0)
+        arr *= (1 - 0.22 * np.clip(sh - soft, 0, 1))[..., None]
+        photo = aerial_rgb.astype(np.float32)
+        # grade the photo's canopy toward the palette: lift contrast, push green, keep luminance structure
+        lum = photo.mean(-1, keepdims=True)
+        tree_col = np.array(PALETTE["tree"], np.float32); hi_col = np.array(PALETTE["tree_hi"], np.float32)
+        lum_n = np.clip((lum - 25) / 70.0, 0, 1)  # 0 = shadow/dark, 1 = lit canopy
+        graded = tree_col * (1 - lum_n) + hi_col * lum_n * 1.15
+        graded = 0.55 * graded + 0.45 * photo * np.array([0.85, 1.05, 0.8])
+        arr = arr * (1 - soft[..., None]) + graded * soft[..., None]
+        cls[tm > 0] = CLASS_ID["tree"]
+        return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8)), Image.fromarray(cls)
 
     # trees: crowns from the canopy mask. Distance-transform peaks place crowns; radius from
     # the distance value so dense masses become clusters of overlapping crowns.
@@ -318,7 +340,7 @@ def render(hole: int, osm_path: Path, out_dir: Path, no_route: bool = False, det
     dc = ImageDraw.Draw(classes)
 
     if procedural:
-        base, classes = procedural_surfaces(base, classes, aerial, g, tree_mask)
+        base, classes = procedural_surfaces(base, classes, aerial, g, tree_mask, trees_mode=TREES_MODE, aerial_rgb=aerial)
 
     # cart paths on top of everything except water
     for kind, is_line, rings, tags in shapes:
@@ -373,9 +395,11 @@ def main() -> None:
     ap.add_argument("--suffix", default="", help="filename suffix for the base, e.g. -detail")
     ap.add_argument("--procedural", action="store_true", help="mow stripes, grain, water gradient, modeled tree crowns with shadows")
     ap.add_argument("--dry-sigma", type=float, default=9.0)
+    ap.add_argument("--trees", choices=["crowns", "photo"], default="crowns")
     args = ap.parse_args()
-    global DRY_SIGMA
+    global DRY_SIGMA, TREES_MODE
     DRY_SIGMA = args.dry_sigma
+    TREES_MODE = args.trees
     for h in args.hole:
         render(h, args.osm, args.out, args.no_route, args.detail, args.suffix, args.procedural)
 

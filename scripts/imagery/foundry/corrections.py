@@ -86,7 +86,7 @@ def band_to_polygon(hole: int, yd0: float, yd1: float, side: str = "both", width
     width = lateral extent in card px from the line (hole 7: 1 px ≈ 0.18 yd across, so 130 px ≈ 23 yd);
     inner = gap from the line (e.g. to keep the fairway itself untouched)."""
     cp, cum = _centerline_card(hole)
-    n = 12
+    n = 40
     ys = [yd0 + (yd1 - yd0) * i / n for i in range(n + 1)]
     pts = [_point_at(cp, cum, y) for y in ys]
     # local direction for the perpendicular
@@ -97,8 +97,18 @@ def band_to_polygon(hole: int, yd0: float, yd1: float, side: str = "both", width
         return (-dy / L, dx / L)  # rotate 90°: for a hole running up the card (dy<0) this points to +x (golfer's right)
     lo = -width if side in ("left", "both") else -inner
     hi = width if side in ("right", "both") else inner
-    left_edge = [(p[0] + perp(i)[0] * lo, p[1] + perp(i)[1] * lo) for i, p in enumerate(pts)]
-    right_edge = [(p[0] + perp(i)[0] * hi, p[1] + perp(i)[1] * hi) for i, p in enumerate(pts)]
+    # organic edges: slow wobble along the strip and rounded ends, so a mown corridor reads as mown grass,
+    # not a ruler-drawn rectangle
+    import math
+    def wob(i, phase):
+        return 1.0 + 0.04 * math.sin(i * 1.7 + phase) + 0.02 * math.sin(i * 3.1 + phase * 2)
+    def cap(i):
+        # taper the first/last ~15% toward a rounded end
+        f = i / n
+        e = min(f, 1 - f) / 0.15
+        return math.sqrt(max(0.0, min(1.0, e))) if e < 1 else 1.0
+    left_edge = [(p[0] + perp(i)[0] * lo * wob(i, 0.4) * cap(i), p[1] + perp(i)[1] * lo * wob(i, 0.4) * cap(i)) for i, p in enumerate(pts)]
+    right_edge = [(p[0] + perp(i)[0] * hi * wob(i, 2.3) * cap(i), p[1] + perp(i)[1] * hi * wob(i, 2.3) * cap(i)) for i, p in enumerate(pts)]
     poly = left_edge + right_edge[::-1]
     return [[round(x, 1), round(y, 1)] for x, y in poly]
 
@@ -128,9 +138,13 @@ def apply_corrections(hole: int, tree_mask: np.ndarray, data: dict | None = None
     return tm.astype(bool), override.astype(bool)
 
 
+ALIASES = {"rough": "ground_green", "grass": "ground_green", "waste": "ground_dry", "dry": "ground_dry", "sand": "bunker", "pond": "water"}
+
+
 def class_overrides(hole: int, data: dict | None = None) -> list[dict]:
     """[{'class': 'fairway', 'polygon': [[x,y],...]}, ...] — ground Mario says is a different class today."""
-    return (data or load()).get(str(hole), {}).get("set_class", [])
+    items = (data or load()).get(str(hole), {}).get("set_class", [])
+    return [{**it, "class": ALIASES.get(it["class"], it["class"])} for it in items]
 
 
 if __name__ == "__main__":

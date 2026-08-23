@@ -122,6 +122,7 @@ def main() -> None:
 
     # 1. skeleton
     mbm.DRY_SIGMA = 4.0
+    mbm.TREES_MODE = "photo"
     mbm.render(h, Path("cond/osm-course.json"), Path("cond"), False, 1.0, "-v6", True)
     skel_p = Path(f"cond/hole-{hh}-base-v6.png")
     cls_p = Path(f"cond/hole-{hh}-classes.png")

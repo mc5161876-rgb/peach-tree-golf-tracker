@@ -72,7 +72,7 @@ def rasterize(hole: int, strokes: list[dict]) -> dict:
         pts = np.array([[int(round(x)), int(round(y))] for x, y in s.get("points", [])], np.int32)
         if tool == "addtree":
             for x, y in pts[:1] if len(pts) else []:
-                adds.append([int(x), int(y), int(max(6, w // 2))])
+                adds.append([int(x), int(y), int(max(13, w // 2))])
             continue
         if len(pts) == 0:
             continue

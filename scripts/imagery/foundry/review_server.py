@@ -148,7 +148,7 @@ class H(BaseHTTPRequestHandler):
             jp = HERE / "final" / f"hole-{hh}.json"
             if jp.exists():
                 m = json.loads(jp.read_text()); b = m["best"]["vsSkeleton150"]; qw = m["best"].get("qwen", {})
-                res = {"pass": m["pass"], "max": b["landMaxYards"], "median": b["landMedianYards"],
+                res = {"pass": m["pass"], "max": b["landMaxYards"], "median": b["landMedianYards"], "attempt": m["best"].get("attempt"),
                        "qwen": (("OK" if qw.get("pass") else "issues: " + ", ".join(qw.get("issues", []))) if qw.get("available") else None)}
             marks = {t: (MARKS / f"hole-{hh}-{t}.png").exists() for t in TOOLS_MASK}
             self._json({"hole": hole, "images": {k: bool(img_path(k, hole)) for k in ("card", "previous", "skeleton", "aerial", "original")},

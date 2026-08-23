@@ -123,7 +123,7 @@
       <div class="stats">
         <div class="stat" id="stMax"><div class="n">—</div><div class="l">Worst tile, yards</div><div class="s">vs the skeleton · gate ≤ 5</div></div>
         <div class="stat" id="stMed"><div class="n">—</div><div class="l">Typical tile, yards</div><div class="s">median over the card</div></div>
-        <div class="stat" id="stQwen"><div class="n">—</div><div class="l">Qwen check</div><div class="s">tee · green · trees · water · sand</div></div>
+        <div class="stat" id="stQwen"><div class="n">—</div><div class="l">Qwen check · advisory</div><div class="s">tee · green · trees · water · sand</div></div>
         <div class="stat" id="stTries"><div class="n">—</div><div class="l">Paint attempts</div><div class="s">up to 3 per render</div></div>
       </div>
     </section>
@@ -182,7 +182,7 @@ function paintStats(r, approved) {
   v.className = "pill " + (approved ? "appr" : (r.pass ? "ok" : "bad")); v.textContent = approved ? "approved" : (r.pass ? "pass" : "fail");
   $("#stMax").querySelector(".n").textContent = r.max.toFixed(2); $("#stMax").className = "stat " + (r.pass ? "ok" : "bad");
   $("#stMed").querySelector(".n").textContent = r.median.toFixed(2); $("#stMed").className = "stat";
-  $("#stQwen").querySelector(".n").textContent = r.qwen ? (r.qwen === "OK" ? "OK" : "flag") : "—"; $("#stQwen").className = "stat " + (r.qwen ? (r.qwen === "OK" ? "ok" : "bad") : ""); $("#stQwen").querySelector(".s").textContent = r.qwen && r.qwen !== "OK" ? r.qwen : "tee · green · trees · water · sand";
+  $("#stQwen").querySelector(".n").textContent = r.qwen ? (r.qwen === "OK" ? "OK" : "flag") : "—"; $("#stQwen").className = "stat " + (r.qwen ? (r.qwen === "OK" ? "ok" : "bad") : ""); $("#stQwen").querySelector(".s").textContent = r.qwen && r.qwen !== "OK" ? r.qwen + " (soft flag — check by eye)" : "tee · green · trees · water · sand";
   $("#stTries").querySelector(".n").textContent = r.attempt ?? "—"; $("#stTries").className = "stat";
 }
 async function selectHole(i) {

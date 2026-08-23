@@ -33,3 +33,14 @@ ControlNets, IP-Adapter ViT-H, fp16-fix VAE). `setup-foundry.sh` rebuilds it.
 
 `sweeps/` are the exact command records; `evidence/` the sheets shown to Mario.
 Nothing here is authoritative course data.
+
+## Update, same night — the look is solved with gpt-image-2 over the skeleton
+
+`gpt_image_render.py` (run with the Hermes venv; uses Hermes' `image_gen/openai-codex`
+plugin = gpt-image-2 via Codex OAuth, ~55 s/image at `high`): feed the **framed** 2:3 padded
+skeleton plus the original illustration as style reference, prompt "geometry is sacred".
+Then crop to the frame, ECC global affine + gentle dense snap (`register_art.register_dense`,
+coarse tiles, ~1.5 px median) onto the skeleton, then gate. Hole 7: 0.41 yd max / 0.06
+median vs skeleton; hole 2: 0.53 / 0.10 (and 0.55 vs the real aerial). Evidence:
+`evidence/gptimage2-finals.jpg`. The white frame matters: unframed, the model re-crops by a
+few percent (4 yd median raw).

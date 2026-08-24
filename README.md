@@ -1,8 +1,11 @@
 # Roundwell golf tracker prototype
 
-`golf-tracker-codex` is the V2 mobile-first Roundwell prototype, tailored to Peach Tree Golf & Country Club in Marysville, California. It combines fast personal scoring with an illustrated course atlas built from real aerial imagery. It uses Vite through the vinext starter and keeps all prototype state in the browser. There is no backend, authentication, database, or third-party API.
+> **Status: work in progress.** This is an unfinished prototype I'm building in public.
+> Scoring works, the illustrated course atlas is being generated hole by hole (18/18
+> pass the QC gate, water shorelines still drift), and plenty is still rough. Follow
+> along or open an issue if you've solved something I haven't.
 
-The untouched V1 source snapshot is stored beside this project at `C:\Users\mc516\Documents\Aries Radar\golf-tracker-codex-v1`.
+`golf-tracker-codex` is the V2 mobile-first Roundwell prototype, tailored to Peach Tree Golf & Country Club in Marysville, California. It combines fast personal scoring with an illustrated course atlas built from real aerial imagery. It uses Vite through the vinext starter and keeps all prototype state in the browser. There is no backend, authentication, database, or third-party API.
 
 ## Start locally
 
